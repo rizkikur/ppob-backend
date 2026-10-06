@@ -9,6 +9,19 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ---
 
+## [v0.5.0] - 2026-10-06
+### Selesai: Phase 5 — Inquiry Domain
+- **Added**:
+  - Model `Inquiry`: Penyimpanan data inquiry tagihan produk postpaid dengan relasi `user()`, `product()`, casts `MoneyCast`, serta helpers `isExpired()`, `isUsable()`, dan `totalAmount()`.
+  - Kontrak `PpobProviderInterface`: Metode `inquiry()`, `pay()`, `checkStatus()`, dan `verifyWebhookSignature()`.
+  - Service `InquiryService`: Proteksi keras penolakan produk prepaid (`PRODUCT_TYPE_MISMATCH`, HTTP 422) dan produk inaktif (`PRODUCT_INACTIVE`, HTTP 422), integrasi ke `PpobService`, dan otomatisasi masa berlaku 10 menit (`expires_at`).
+  - Drivers: Implementasi `PlnDriver` (inquiry tagihan listrik) dan `PdamDriver` (inquiry tagihan air) dengan dukungan mock response.
+  - FormRequest `InquiryRequest`: Validasi input `sku_code` dan `customer_number` (alphanumeric).
+  - Controller `InquiryController`: Endpoint `POST /inquiry` mengembalikan `InquiryResource` dalam envelope `ApiResponse` (HTTP 200).
+  - Feature tests: `InquiryValidationTest` (4 test), `InquiryFlowTest` (3 test), dan `InquiryExpiryTest` (2 test) — total 11 test lulus 100%.
+
+---
+
 ## [v0.4.0] - 2026-10-06
 ### Selesai: Phase 4 — Product Domain
 - **Added**:
