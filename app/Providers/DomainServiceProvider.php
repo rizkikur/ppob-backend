@@ -8,6 +8,7 @@ use App\Domain\Auth\Drivers\FonnteOtpDriver;
 use App\Domain\Auth\Drivers\WaBizOtpDriver;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Services\InquiryService;
+use App\Domain\Ppob\Services\CircuitBreakerService;
 use App\Domain\Ppob\Services\PpobService;
 use App\Domain\Transaction\Services\TransactionService;
 use App\Domain\Wallet\Drivers\FakeGatewayDriver;
@@ -54,6 +55,7 @@ class DomainServiceProvider extends ServiceProvider
         $this->app->bind('gateway.xendit', XenditGatewayDriver::class);
 
         // ─── Inquiry & PPOB Services ──────────────────────────────────────────
+        $this->app->singleton(CircuitBreakerService::class);
         $this->app->singleton(PpobService::class);
         $this->app->singleton(InquiryService::class);
         $this->app->singleton(TransactionService::class);

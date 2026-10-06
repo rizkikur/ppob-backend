@@ -83,6 +83,13 @@ class PlnDriver implements PpobProviderInterface
 
     public function verifyWebhookSignature(string $rawBody, string $signature): bool
     {
-        return true;
+        $secret = config('ppob.providers.pln.webhook_secret') ?: 'pln_secret_key';
+        $expected = hash_hmac('sha256', $rawBody, $secret);
+
+        $cleanSignature = str_starts_with($signature, 'sha256=')
+            ? substr($signature, 7)
+            : $signature;
+
+        return hash_equals($expected, $cleanSignature);
     }
 }
