@@ -9,6 +9,30 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ---
 
+## [v0.7.0] - 2026-10-06
+### Selesai: Phase 7 — PPOB Integration Domain
+- **Added**:
+  - Driver `TelkomselDriver`: Integrasi pengisian pulsa & data Telkomsel, serial number generation, dan verifikasi HMAC-SHA256 signature.
+  - Driver `IndosatDriver`: Integrasi pulsa & paket data Indosat Ooredoo dan verifikasi webhook.
+  - Driver `XlDriver`: Integrasi pulsa & paket data XL Axiata / Axis dan verifikasi webhook.
+  - Driver `PlnDriver`: Integrasi token prepaid & tagihan listrik postpaid lengkap dengan HMAC signature verification.
+  - Driver `PdamDriver`: Integrasi tagihan air PDAM lengkap dengan HMAC signature verification.
+  - Service `CircuitBreakerService` (ADR-003): Pemantauan status supplier (`CLOSED`, `OPEN`, `HALF-OPEN`), failure threshold counter, cooldown recovery, dan fail-fast protection.
+  - Service `PpobService`: Dynamic supplier routing, integrasi CircuitBreaker (penolakan langsung HTTP 503 `PROVIDER_UNAVAILABLE` saat circuit OPEN), dan verifikasi webhook signature terpusat.
+  - Controller `WebhookController`:
+    - `POST /ppob/callback` & `/api/v1/ppob/callback` dengan validasi keamanan berlapis:
+      1. HMAC-SHA256 signature check (`X-Signature`) -> Tolak 401 `WEBHOOK_SIGNATURE_INVALID`.
+      2. Timestamp tolerance check (`X-Timestamp`, maks 300 detik) -> Tolak 422 `WEBHOOK_TIMESTAMP_INVALID`.
+      3. Idempotency `event_id` check pada `processed_webhook_events` -> Tolak 409 `WEBHOOK_DUPLICATE`.
+    - Auto-update status transaksi (`success` / `failed`) dan auto-refund saldo jika provider gagal.
+  - Feature tests:
+    - `WebhookValidationTest` (7 test): Validasi signature, timestamp stale, event_id required, duplikasi 409 conflict, status update success, dan failure auto-refund.
+    - `ProviderCircuitBreakerTest` (4 test): Threshold tripping, fail-fast rejection 503 `PROVIDER_UNAVAILABLE`, dan recovery.
+    - `ProviderDriverTest` (7 test): Eksekusi pay & inquiry rejection untuk prepaid pada semua driver, serta verifikasi signature constant-time.
+    - Total 18 test baru — suite keseluruhan kini 104 tests (384 assertions) 100% lulus.
+
+---
+
 ## [v0.6.0] - 2026-10-06
 ### Selesai: Phase 6 — Transaction Domain
 - **Added**:

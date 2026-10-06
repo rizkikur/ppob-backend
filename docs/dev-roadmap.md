@@ -136,15 +136,15 @@ Dependensi: Phase 6
 
 | No  | Item                                          | Status         | Catatan                                          |
 |-----|-----------------------------------------------|----------------|--------------------------------------------------|
-| 7.1 | Driver: `TelkomselDriver` (pulsa + paket data)| ⬜ Belum       |                                                  |
-| 7.2 | Driver: `IndosatDriver`                       | ⬜ Belum       |                                                  |
-| 7.3 | Driver: `XlDriver`                            | ⬜ Belum       |                                                  |
-| 7.4 | Driver: `PlnDriver` (token + tagihan)         | ⬜ Belum       |                                                  |
-| 7.5 | Driver: `PdamDriver`                          | ⬜ Belum       |                                                  |
-| 7.6 | Service: `PpobService` (routing ke driver)    | ⬜ Belum       |                                                  |
-| 7.7 | Controller: `WebhookController`               | ⬜ Belum       | mTLS + HMAC + timestamp + idempotency            |
-| 7.8 | Feature test: webhook validasi berlapis       | ⬜ Belum       | Signature salah → 401, duplikat → 409            |
-| 7.9 | Feature test: provider unavailable handling   | ⬜ Belum       |                                                  |
+| 7.1 | Driver: `TelkomselDriver` (pulsa + paket data)| ✅ Selesai     | Driver pulsa & paket data + serial number + HMAC |
+| 7.2 | Driver: `IndosatDriver`                       | ✅ Selesai     | Driver pulsa & paket data + serial number + HMAC |
+| 7.3 | Driver: `XlDriver`                            | ✅ Selesai     | Driver pulsa & paket data + serial number + HMAC |
+| 7.4 | Driver: `PlnDriver` (token + tagihan)         | ✅ Selesai     | Token listrik prepaid + tagihan postpaid + HMAC  |
+| 7.5 | Driver: `PdamDriver`                          | ✅ Selesai     | Tagihan air PDAM + HMAC signature verification   |
+| 7.6 | Service: `PpobService` (routing ke driver)    | ✅ Selesai     | Router driver + Circuit Breaker (ADR-003)        |
+| 7.7 | Controller: `WebhookController`               | ✅ Selesai     | Validasi HMAC signature, timestamp, event_id     |
+| 7.8 | Feature test: webhook validasi berlapis       | ✅ Selesai     | 7 test di `WebhookValidationTest.php`            |
+| 7.9 | Feature test: provider unavailable handling   | ✅ Selesai     | 4 test di `ProviderCircuitBreakerTest.php` (503) |
 
 ---
 
