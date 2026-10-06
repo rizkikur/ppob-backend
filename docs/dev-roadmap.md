@@ -154,13 +154,14 @@ Dependensi: Phase 6
 
 | No  | Item                                          | Status         | Catatan                                          |
 |-----|-----------------------------------------------|----------------|--------------------------------------------------|
-| 8.1 | Model: `Partner`, `PartnerLog`                | ⬜ Belum       |                                                  |
-| 8.2 | Service: `PartnerAuthService` (validasi API Key + HMAC) | ⬜ Belum | constant-time compare                        |
-| 8.3 | Middleware: `PartnerAuthMiddleware`            | ⬜ Belum       | IP whitelist, rate limit, signature               |
-| 8.4 | Controller: `PartnerController`               | ⬜ Belum       | Expose subset endpoint untuk partner             |
-| 8.5 | Feature test: partner auth flow               | ⬜ Belum       | API key salah → 401, HMAC salah → 401             |
-| 8.6 | Feature test: partner rate limit              | ⬜ Belum       |                                                  |
-| 8.7 | Feature test: IP whitelist                    | ⬜ Belum       |                                                  |
+| 8.1 | Model: `Partner`, `PartnerLog`                | ✅ Selesai     | Model `Partner`, `PartnerLog`, `PartnerProductPrice` (ADR-006) |
+| 8.2 | Service: `PartnerAuthService` (validasi API Key + HMAC) | ✅ Selesai | Constant-time compare, IP whitelist, tolerance 300s, RPM |
+| 8.3 | Middleware: `PartnerAuthMiddleware`            | ✅ Selesai     | Autentikasi partner user context + audit trail logging ke `partner_logs` |
+| 8.4 | Controller: `PartnerController`               | ✅ Selesai     | Endpoint: `GET /partner/balance`, `GET /partner/products`, `POST /partner/transactions`, `GET /partner/transactions/{partnerRef}` |
+| 8.5 | Feature test: partner auth flow               | ✅ Selesai     | 9 test di `PartnerAuthTest.php` (API key 401, HMAC 401, timestamp 422, audit log) |
+| 8.6 | Feature test: partner rate limit              | ✅ Selesai     | 2 test di `PartnerRateLimitTest.php` (RPM limit 429 & per-partner isolation) |
+| 8.7 | Feature test: IP whitelist                    | ✅ Selesai     | 3 test di `PartnerIpWhitelistTest.php` (blocked IP 403, allowed IP 200, wildcard) |
+| 8.8 | Feature test: partner transactions & pricing  | ✅ Selesai     | 8 test di `PartnerTransactionTest.php` (debit wallet, ADR-006 pricing, idempotency 409) |
 
 ---
 

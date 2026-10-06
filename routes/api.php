@@ -21,6 +21,7 @@ require __DIR__.'/api/products.php';
 require __DIR__.'/api/inquiry.php';
 require __DIR__.'/api/transactions.php';
 require __DIR__.'/api/webhooks.php';
+require __DIR__.'/partner.php';
 
 // ─── API v1 Prefix Group (OpenAPI Standard) ───────────────────────────────────
 
@@ -32,4 +33,5 @@ Route::prefix('api/v1')->group(function () {
     require __DIR__.'/api/inquiry.php';
     require __DIR__.'/api/transactions.php';
     require __DIR__.'/api/webhooks.php';
+    require __DIR__.'/partner.php';
 });

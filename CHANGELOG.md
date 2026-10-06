@@ -9,6 +9,34 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ---
 
+## [v0.8.0] - 2026-10-06
+### Selesai: Phase 8 — Partner / Open API Domain
+- **Added**:
+  - Migration: `2026_10_06_000001_add_user_id_to_partners_table` menghubungkan partner ke entitas `users` untuk pengelolaan dompet saldo deposit dan integrasi idempotency.
+  - Model `Partner`: Relasi ke `user()`, `logs()`, `productPrices()`, helper dekripsi AES-256 secret (`getSecretDecrypted()`), custom pricing resolver (`getPriceForProduct()`), dan wallet deposit balance accessor (`getBalance()`).
+  - Model `PartnerProductPrice` (ADR-006): Skema harga flat per partner per produk dengan `MoneyCast`.
+  - Model `PartnerLog`: Model pencatatan audit log request H2H/B2B (`endpoint`, `method`, `request_body`, `response_code`, `duration_ms`, `ip_address`).
+  - Service `PartnerAuthService`: Validasi autentikasi API Key aktif, toleransi waktu timestamp (300 detik), IP Whitelist filtering, rate limit per partner (RPM via Cache), dan verifikasi HMAC-SHA256 signature secara constant-time (`hash_equals`).
+  - Middleware `PartnerAuthMiddleware`: Interceptor request partner, mapping ke `User` context (`Auth::setUser()`), serta pencatatan audit log otomatis ke tabel `partner_logs`.
+  - Service `TransactionService::createForPartner()`: Pembuatan transaksi partner dengan pendebetan saldo deposit mitra dan penerapan harga khusus ADR-006.
+  - Controller `PartnerController`:
+    - `GET /partner/balance` & `/api/v1/partner/balance`: Cek saldo deposit mitra.
+    - `GET /partner/products` & `/api/v1/partner/products`: Katalog produk dengan harga jual khusus mitra (ADR-006).
+    - `POST /partner/transactions` & `/api/v1/partner/transactions`: Transaksi PPOB partner terlindung Idempotency.
+    - `GET /partner/transactions/{partnerRef}` & `/api/v1/partner/transactions/{partnerRef}`: Cek status transaksi via numeric ID atau Idempotency-Key.
+  - Form Requests & Resources:
+    - `CreatePartnerTransactionRequest`
+    - `PartnerProductResource`
+    - `PartnerTransactionResource`
+  - Feature tests:
+    - `PartnerAuthTest` (9 test): Validasi API key, signature HMAC, toleransi timestamp, sha256 prefix, partner nonaktif, dan audit logging.
+    - `PartnerRateLimitTest` (2 test): Penegakan RPM (429 `PARTNER_RATE_LIMITED`) dan isolasi antar mitra.
+    - `PartnerIpWhitelistTest` (3 test): Penolakan IP di luar whitelist (403 `PARTNER_IP_BLOCKED`), IP diizinkan, dan null wildcard.
+    - `PartnerTransactionTest` (8 test): Cek saldo, harga khusus ADR-006, debit dompet, penegakan idempotency 409 conflict, saldo tidak cukup 422, dan isolasi data transaksi antar partner.
+    - Total 22 test baru — suite keseluruhan kini 126 tests (446 assertions) 100% lulus.
+
+---
+
 ## [v0.7.0] - 2026-10-06
 ### Selesai: Phase 7 — PPOB Integration Domain
 - **Added**:
