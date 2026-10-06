@@ -20,7 +20,12 @@ use Illuminate\Http\Request;
  */
 class PartnerController extends ApiController
 {
-    public function __construct(private readonly TransactionService $transactionService) {}
+    protected TransactionService $transactionService;
+
+    public function __construct(TransactionService $transactionService)
+    {
+        $this->transactionService = $transactionService;
+    }
 
     /**
      * Cek saldo deposit mitra.

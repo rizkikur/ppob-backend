@@ -14,7 +14,12 @@ use Symfony\Component\HttpFoundation\Response;
 /** Middleware autentikasi partner Open API dengan audit logging ke partner_logs. */
 class PartnerAuthMiddleware
 {
-    public function __construct(private readonly PartnerAuthService $authService) {}
+    protected PartnerAuthService $authService;
+
+    public function __construct(PartnerAuthService $authService)
+    {
+        $this->authService = $authService;
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
