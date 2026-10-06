@@ -3,6 +3,7 @@
 namespace App\Domain\Inquiry\Http\Resources;
 
 use App\Domain\Inquiry\Models\Inquiry;
+use App\Domain\Product\Http\Resources\ProductResource;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 
@@ -13,6 +14,9 @@ class InquiryResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'product' => $this->relationLoaded('product') && $this->product
+                ? new ProductResource($this->product)
+                : null,
             'customer_number' => $this->customer_number,
             'amount' => $this->amount_cents?->toCents(),
             'amount_display' => $this->amount_cents?->format(),

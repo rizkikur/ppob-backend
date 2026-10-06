@@ -15,7 +15,9 @@ use App\Domain\Shared\Exceptions\BusinessException;
  */
 class InquiryService
 {
-    public function __construct(private readonly PpobService $ppobService) {}
+    public function __construct(
+        private readonly PpobService $ppobService
+    ) {}
 
     /** @throws BusinessException */
     public function inquiry(User $user, Product $product, string $customerNumber): Inquiry
@@ -23,21 +25,25 @@ class InquiryService
         if ($product->isPrepaid()) {
             throw BusinessException::productTypeMismatch('postpaid', 'prepaid');
         }
+
         if (! $product->is_active) {
             throw BusinessException::productInactive();
         }
+
         $result = $this->ppobService->inquiry($product, $customerNumber);
+
+        $expireMinutes = (int) config('ppob.inquiry.expire_minutes', 10);
 
         return Inquiry::create([
             'user_id' => $user->id,
             'product_id' => $product->id,
             'customer_number' => $customerNumber,
             'amount_cents' => $result['amount_cents'],
-            'admin_fee_cents' => $product->admin_fee_cents->toCents(),
+            'admin_fee_cents' => $product->admin_fee_cents?->toCents() ?? 0,
             'inquiry_ref' => $result['ref'],
-            'provider_response' => $result['raw'],
+            'provider_response' => $result['raw'] ?? [],
             'status' => Inquiry::STATUS_SUCCESS,
-            'expires_at' => now()->addMinutes(10),
+            'expires_at' => now()->addMinutes($expireMinutes),
         ]);
     }
 }

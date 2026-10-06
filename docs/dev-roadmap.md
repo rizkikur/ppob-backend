@@ -99,14 +99,14 @@ Dependensi: Phase 4, Phase 1
 
 | No  | Item                                          | Status         | Catatan                                          |
 |-----|-----------------------------------------------|----------------|--------------------------------------------------|
-| 5.1 | Model: `Inquiry`                              | ⬜ Belum       |                                                  |
-| 5.2 | Interface: `PpobProviderInterface`            | ⬜ Belum       | Method: `inquiry()`, `pay()`, `checkStatus()`    |
-| 5.3 | Service: `InquiryService`                     | ⬜ Belum       | Tolak SKU prepaid, expire 10 menit               |
-| 5.4 | Driver: `PlnDriver` (inquiry tagihan)         | ⬜ Belum       |                                                  |
-| 5.5 | Driver: `PdamDriver` (inquiry tagihan)        | ⬜ Belum       |                                                  |
-| 5.6 | Controller + Request: Inquiry                 | ⬜ Belum       |                                                  |
-| 5.7 | Feature test: validasi prepaid/postpaid       | ⬜ Belum       | **WAJIB** — inquiry ditolak untuk SKU prepaid    |
-| 5.8 | Feature test: inquiry expire                  | ⬜ Belum       |                                                  |
+| 5.1 | Model: `Inquiry`                              | ✅ Selesai     | Model inquiry, relasi user & product, totalAmount |
+| 5.2 | Interface: `PpobProviderInterface`            | ✅ Selesai     | Method: `inquiry()`, `pay()`, `checkStatus()`, dsb |
+| 5.3 | Service: `InquiryService`                     | ✅ Selesai     | Tolak SKU prepaid, expire 10 menit               |
+| 5.4 | Driver: `PlnDriver` (inquiry tagihan)         | ✅ Selesai     | Driver inquiry tagihan listrik PLN + mock support |
+| 5.5 | Driver: `PdamDriver` (inquiry tagihan)        | ✅ Selesai     | Driver inquiry tagihan air PDAM + mock support   |
+| 5.6 | Controller + Request: Inquiry                 | ✅ Selesai     | `POST /inquiry` + `InquiryResource` via ApiController |
+| 5.7 | Feature test: validasi prepaid/postpaid       | ✅ Selesai     | 4 test case di `InquiryValidationTest.php`       |
+| 5.8 | Feature test: inquiry expire & flow           | ✅ Selesai     | 3 di `InquiryFlowTest` + 2 di `InquiryExpiryTest`|
 
 ---
 

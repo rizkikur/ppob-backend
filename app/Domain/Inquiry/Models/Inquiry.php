@@ -2,8 +2,12 @@
 
 namespace App\Domain\Inquiry\Models;
 
+use App\Domain\Auth\Models\User;
+use App\Domain\Product\Models\Product;
 use App\Domain\Shared\Casts\MoneyCast;
+use App\Domain\Shared\ValueObjects\Money;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Model Inquiry — hasil inquiry tagihan postpaid sebelum pembayaran.
@@ -16,9 +20,24 @@ class Inquiry extends Model
 
     protected $table = 'inquiries';
 
-    protected $fillable = ['user_id', 'product_id', 'customer_number', 'amount_cents', 'admin_fee_cents', 'inquiry_ref', 'provider_response', 'status', 'expires_at'];
+    protected $fillable = [
+        'user_id',
+        'product_id',
+        'customer_number',
+        'amount_cents',
+        'admin_fee_cents',
+        'inquiry_ref',
+        'provider_response',
+        'status',
+        'expires_at',
+    ];
 
-    protected $casts = ['amount_cents' => MoneyCast::class, 'admin_fee_cents' => MoneyCast::class, 'provider_response' => 'array', 'expires_at' => 'datetime'];
+    protected $casts = [
+        'amount_cents' => MoneyCast::class,
+        'admin_fee_cents' => MoneyCast::class,
+        'provider_response' => 'array',
+        'expires_at' => 'datetime',
+    ];
 
     public const STATUS_PENDING = 'pending';
 
@@ -28,6 +47,16 @@ class Inquiry extends Model
 
     public const STATUS_EXPIRED = 'expired';
 
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class);
+    }
+
     public function isExpired(): bool
     {
         return $this->expires_at->isPast();
@@ -36,5 +65,13 @@ class Inquiry extends Model
     public function isUsable(): bool
     {
         return $this->status === self::STATUS_SUCCESS && ! $this->isExpired();
+    }
+
+    public function totalAmount(): Money
+    {
+        $amount = $this->amount_cents ?? Money::zero();
+        $adminFee = $this->admin_fee_cents ?? Money::zero();
+
+        return $amount->add($adminFee);
     }
 }
