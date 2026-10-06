@@ -11,22 +11,28 @@ class PartnerTransactionResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
+        $product = $this->product;
+        $amountCents = $this->amount_cents;
+        $sellPriceCents = $this->sell_price_cents;
+        $createdAt = $this->created_at;
+        $updatedAt = $this->updated_at;
+
         return [
             'id' => $this->id,
             'partner_id' => $this->partner_id,
-            'sku_code' => $this->product?->sku_code,
-            'product_name' => $this->product?->name,
+            'sku_code' => $product ? $product->sku_code : null,
+            'product_name' => $product ? $product->name : null,
             'customer_number' => $this->customer_number,
-            'amount' => $this->amount_cents?->toCents(),
-            'amount_display' => $this->amount_cents?->format(),
-            'price' => $this->sell_price_cents?->toCents(),
-            'price_display' => $this->sell_price_cents?->format(),
+            'amount' => $amountCents ? $amountCents->toCents() : null,
+            'amount_display' => $amountCents ? $amountCents->format() : null,
+            'price' => $sellPriceCents ? $sellPriceCents->toCents() : null,
+            'price_display' => $sellPriceCents ? $sellPriceCents->format() : null,
             'status' => $this->status,
             'idempotency_key' => $this->idempotency_key,
             'provider_ref' => $this->provider_ref,
             'failure_reason' => $this->failure_reason,
-            'created_at' => $this->created_at?->toISOString(),
-            'updated_at' => $this->updated_at?->toISOString(),
+            'created_at' => $createdAt ? $createdAt->toISOString() : null,
+            'updated_at' => $updatedAt ? $updatedAt->toISOString() : null,
         ];
     }
 }

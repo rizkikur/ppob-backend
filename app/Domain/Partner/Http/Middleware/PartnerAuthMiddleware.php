@@ -14,7 +14,12 @@ use Symfony\Component\HttpFoundation\Response;
 /** Middleware autentikasi partner Open API dengan audit logging ke partner_logs. */
 class PartnerAuthMiddleware
 {
-    public function __construct(private readonly PartnerAuthService $authService) {}
+    protected PartnerAuthService $authService;
+
+    public function __construct(PartnerAuthService $authService)
+    {
+        $this->authService = $authService;
+    }
 
     public function handle(Request $request, Closure $next): Response
     {
@@ -69,7 +74,7 @@ class PartnerAuthMiddleware
                 'duration_ms' => $durationMs,
                 'ip_address' => $request->ip() ?? '127.0.0.1',
             ]);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Logging audit jangan sampai menggagalkan response
         }
     }
