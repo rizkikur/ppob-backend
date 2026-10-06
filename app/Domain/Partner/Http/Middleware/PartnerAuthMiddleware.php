@@ -76,6 +76,15 @@ class PartnerAuthMiddleware
             ]);
         } catch (\Throwable $e) {
             // Logging audit jangan sampai menggagalkan response
+            \Log::error('Partner auth middleware logging error: '.$e->getMessage(), [
+                'partner_id' => $partner->id,
+                'endpoint' => $request->path(),
+                'method' => $request->method(),
+                'request_body' => $request->all(),
+                'response_code' => $statusCode,
+                'duration_ms' => $durationMs,
+                'ip_address' => $request->ip() ?? '127.0.0.1',
+            ]);
         }
     }
 }

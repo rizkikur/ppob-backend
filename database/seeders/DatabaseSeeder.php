@@ -12,6 +12,10 @@ class DatabaseSeeder extends Seeder
             UserTierSeeder::class,
             ProductCategorySeeder::class,
             ProviderSeeder::class,
+            ProductSeeder::class,
+            ProductTierPriceSeeder::class,
+            UserDemoSeeder::class,
+            PartnerDemoSeeder::class,
         ]);
     }
 }
