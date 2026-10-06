@@ -4,6 +4,7 @@ namespace App\Domain\Transaction\Models;
 
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Models\Inquiry;
+use App\Domain\Partner\Models\Partner;
 use App\Domain\Product\Models\Product;
 use App\Domain\Shared\Casts\MoneyCast;
 use Illuminate\Database\Eloquent\Model;
@@ -66,6 +67,11 @@ class Transaction extends Model
     public function inquiry(): BelongsTo
     {
         return $this->belongsTo(Inquiry::class);
+    }
+
+    public function partner(): BelongsTo
+    {
+        return $this->belongsTo(Partner::class);
     }
 
     public function isPending(): bool

@@ -3,6 +3,7 @@
 namespace App\Domain\Partner\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class PartnerLog extends Model
 {
@@ -10,7 +11,24 @@ class PartnerLog extends Model
 
     protected $table = 'partner_logs';
 
-    protected $fillable = ['partner_id', 'endpoint', 'method', 'request_body', 'response_code', 'duration_ms', 'ip_address'];
+    protected $fillable = [
+        'partner_id',
+        'endpoint',
+        'method',
+        'request_body',
+        'response_code',
+        'duration_ms',
+        'ip_address',
+    ];
 
-    protected $casts = ['request_body' => 'array', 'response_code' => 'integer', 'duration_ms' => 'integer'];
+    protected $casts = [
+        'request_body' => 'array',
+        'response_code' => 'integer',
+        'duration_ms' => 'integer',
+    ];
+
+    public function partner(): BelongsTo
+    {
+        return $this->belongsTo(Partner::class);
+    }
 }

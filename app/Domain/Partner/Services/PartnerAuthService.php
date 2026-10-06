@@ -9,35 +9,50 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Service autentikasi partner Open API.
- * Validasi: API Key + timestamp + HMAC signature (lihat docs/security-design.md bagian 5).
+ * Validasi: API Key + timestamp + IP whitelist + rate limit + HMAC signature (docs/security-design.md bagian 5).
  */
 class PartnerAuthService
 {
     private const TIMESTAMP_TOLERANCE = 300; // 5 menit
 
-    /** Validasi request partner secara penuh. @throws BusinessException */
+    /**
+     * Validasi request partner secara penuh.
+     *
+     * @throws BusinessException
+     */
     public function validate(Request $request): Partner
     {
         $apiKey = $request->header('X-Api-Key');
         $timestamp = $request->header('X-Timestamp');
         $signature = $request->header('X-Signature');
+
         if (! $apiKey) {
             throw new BusinessException('PARTNER_KEY_INVALID', 'X-Api-Key header wajib diisi', 401);
         }
-        $partner = Partner::where('api_key', $apiKey)->where('is_active', true)->first();
-        if (! $partner) {
-            throw new BusinessException('PARTNER_KEY_INVALID', 'API Key tidak valid', 401);
+
+        $partner = Partner::where('api_key', $apiKey)->first();
+        if (! $partner || ! $partner->is_active) {
+            throw new BusinessException('PARTNER_KEY_INVALID', 'API Key tidak valid atau partner tidak aktif', 401);
         }
+
+        $request->attributes->set('partner', $partner);
+
         // Cek IP whitelist
-        if ($partner->allowed_ips && ! in_array($request->ip(), $partner->allowed_ips)) {
-            throw new BusinessException('PARTNER_IP_BLOCKED', 'IP tidak ada dalam whitelist', 403);
+        if ($partner->allowed_ips && ! empty($partner->allowed_ips)) {
+            $clientIp = $request->ip();
+            if (! in_array($clientIp, $partner->allowed_ips, true)) {
+                throw new BusinessException('PARTNER_IP_BLOCKED', 'IP tidak ada dalam whitelist partner', 403);
+            }
         }
+
         // Cek timestamp
         if (! $timestamp || abs(now()->timestamp - (int) $timestamp) > self::TIMESTAMP_TOLERANCE) {
-            throw new BusinessException('WEBHOOK_TIMESTAMP_INVALID', 'Timestamp di luar toleransi', 422);
+            throw new BusinessException('WEBHOOK_TIMESTAMP_INVALID', 'Timestamp di luar toleransi (maks 300 detik)', 422);
         }
+
         // Cek rate limit
         $this->enforceRateLimit($partner);
+
         // Verifikasi HMAC signature
         $this->verifySignature($request, $partner, $timestamp, $signature);
 
@@ -48,11 +63,16 @@ class PartnerAuthService
     {
         $key = "partner:{$partner->id}:rpm";
         $count = (int) Cache::get($key, 0);
+
         if ($count >= $partner->rate_limit_rpm) {
             throw new BusinessException('PARTNER_RATE_LIMITED', 'Anda telah melampaui batas request per menit', 429);
         }
-        Cache::increment($key);
-        Cache::put($key, Cache::get($key, 1), now()->addMinute());
+
+        if (! Cache::has($key)) {
+            Cache::put($key, 1, 60);
+        } else {
+            Cache::increment($key);
+        }
     }
 
     private function verifySignature(Request $request, Partner $partner, string $timestamp, ?string $signature): void
@@ -60,12 +80,38 @@ class PartnerAuthService
         if (! $signature) {
             throw new BusinessException('PARTNER_SIGNATURE_INVALID', 'X-Signature header wajib diisi', 401);
         }
+
         $rawBody = $request->getContent();
-        $bodyHash = hash('sha256', $rawBody);
-        $stringToSign = $request->method()."\n".$request->path()."\n".$timestamp."\n".$bodyHash;
-        $expected = hash_hmac('sha256', $stringToSign, $partner->getSecretDecrypted());
-        // Constant-time compare untuk mencegah timing attack
-        if (! hash_equals($expected, $signature)) {
+        $bodyHashes = [hash('sha256', $rawBody)];
+        if ($rawBody === '[]' || $rawBody === '{}' || $rawBody === '') {
+            $bodyHashes[] = hash('sha256', '');
+            $bodyHashes[] = hash('sha256', '[]');
+            $bodyHashes[] = hash('sha256', '{}');
+        }
+        $bodyHashes = array_unique($bodyHashes);
+
+        $pathWithSlash = '/'.ltrim($request->path(), '/');
+        $pathWithoutSlash = ltrim($request->path(), '/');
+        $paths = array_unique([$pathWithSlash, $pathWithoutSlash]);
+
+        $secret = $partner->getSecretDecrypted();
+        $cleanSignature = str_starts_with($signature, 'sha256=')
+            ? substr($signature, 7)
+            : $signature;
+
+        $isValid = false;
+        foreach ($paths as $path) {
+            foreach ($bodyHashes as $bHash) {
+                $stringToSign = strtoupper($request->method())."\n".$path."\n".$timestamp."\n".$bHash;
+                $expected = hash_hmac('sha256', $stringToSign, $secret);
+                if (hash_equals($expected, $cleanSignature)) {
+                    $isValid = true;
+                    break 2;
+                }
+            }
+        }
+
+        if (! $isValid) {
             throw new BusinessException('PARTNER_SIGNATURE_INVALID', 'Signature tidak valid', 401);
         }
     }

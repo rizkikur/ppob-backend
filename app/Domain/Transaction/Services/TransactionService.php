@@ -4,6 +4,7 @@ namespace App\Domain\Transaction\Services;
 
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Models\Inquiry;
+use App\Domain\Partner\Models\Partner;
 use App\Domain\Product\Models\Product;
 use App\Domain\Product\Services\ProductPricingService;
 use App\Domain\Shared\Exceptions\BusinessException;
@@ -99,6 +100,96 @@ class TransactionService
 
             $transaction = Transaction::create([
                 'user_id' => $user->id,
+                'product_id' => $product->id,
+                'inquiry_id' => $inquiry?->id,
+                'customer_number' => $customerNumber,
+                'amount_cents' => $amount->toCents(),
+                'sell_price_cents' => $sellPrice->toCents(),
+                'status' => Transaction::STATUS_PENDING,
+                'idempotency_key' => $idempotencyKey,
+            ]);
+
+            // Hubungkan ID transaksi ke referensi mutasi dompet
+            $mutation->update(['reference_id' => $transaction->id]);
+
+            // Dispatch job async ke queue provider (ADR-002)
+            $product->loadMissing('provider');
+            $queueName = $product->provider?->queue_name ?: 'transactions';
+            ProcessTransactionJob::dispatch($transaction)->onQueue($queueName);
+
+            return $transaction;
+        });
+    }
+
+    /**
+     * Buat transaksi baru untuk partner (Open API / B2B).
+     *
+     * @throws BusinessException
+     */
+    public function createForPartner(
+        Partner $partner,
+        Product $product,
+        string $customerNumber,
+        ?int $inquiryId = null,
+        ?int $clientAmount = null
+    ): Transaction {
+        if (! $product->is_active) {
+            throw BusinessException::productInactive();
+        }
+
+        // Ambil harga khusus partner (ADR-006: partner_product_prices atau fallback base+fee)
+        $sellPrice = $partner->getPriceForProduct($product);
+
+        $partnerUser = $partner->getOrCreateUser();
+        $inquiry = null;
+
+        if ($product->isPostpaid()) {
+            if (! $inquiryId) {
+                throw BusinessException::inquiryRequired();
+            }
+
+            $inquiry = Inquiry::where('id', $inquiryId)
+                ->where('user_id', $partnerUser->id)
+                ->first();
+
+            if (! $inquiry) {
+                throw BusinessException::inquiryRequired();
+            }
+
+            if ($inquiry->product_id !== $product->id || $inquiry->customer_number !== $customerNumber) {
+                throw BusinessException::inquiryRequired();
+            }
+
+            if (! $inquiry->isUsable()) {
+                throw BusinessException::inquiryExpired();
+            }
+
+            if ($clientAmount === null || $clientAmount !== $inquiry->amount_cents->toCents()) {
+                throw BusinessException::inquiryAmountMismatch();
+            }
+
+            $sellPrice = $inquiry->totalAmount();
+            $amount = $inquiry->amount_cents;
+        } else {
+            // Prepaid: amount adalah base_price produk atau sellPrice
+            $amount = $product->base_price_cents ?? $sellPrice;
+        }
+
+        return DB::transaction(function () use ($partner, $partnerUser, $product, $customerNumber, $inquiry, $amount, $sellPrice) {
+            // Debit saldo deposit partner via WalletService
+            $mutation = $this->walletService->debit(
+                $partnerUser,
+                $sellPrice,
+                WalletMutation::REF_TRANSACTION,
+                null,
+                "Partner {$partner->name} - Pembelian {$product->name}"
+            );
+
+            $idempotencyKey = request()->header('Idempotency-Key') ?? '';
+
+            $transaction = Transaction::create([
+                'user_id' => $partnerUser->id,
+                'partner_id' => $partner->id,
                 'product_id' => $product->id,
                 'inquiry_id' => $inquiry?->id,
                 'customer_number' => $customerNumber,
