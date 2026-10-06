@@ -1,0 +1,1168 @@
+openapi: 3.1.0
+info:
+  title: PPOB Backend API
+  version: 1.0.0
+  description: |
+    Backend API untuk layanan PPOB (pulsa, token listrik, tagihan, dll) dengan fitur dompet digital.
+    Konsumen: Mobile App + Partner Open API.
+  contact:
+    name: API Support
+
+servers:
+  - url: https://api.ppob.example.com/v1
+    description: Production
+  - url: http://localhost/api
+    description: Local Development
+
+tags:
+  - name: Auth
+    description: Autentikasi dan manajemen sesi
+  - name: Security
+    description: PIN setup, challenge, dan verifikasi
+  - name: Wallet
+    description: Saldo, mutasi, dan top-up dompet
+  - name: Product
+    description: Katalog produk PPOB
+  - name: Inquiry
+    description: Inquiry tagihan sebelum pembayaran (postpaid)
+  - name: Transaction
+    description: Transaksi pembelian produk PPOB
+  - name: Webhook
+    description: Callback dari provider PPOB (bukan untuk mobile app)
+  - name: Partner
+    description: Open API untuk mitra bisnis
+
+# ─────────────────────────────────────────────
+# COMPONENTS
+# ─────────────────────────────────────────────
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Sanctum token dari POST /auth/login atau POST /auth/otp/verify
+
+    PartnerApiKey:
+      type: apiKey
+      in: header
+      name: X-Api-Key
+      description: API Key partner
+
+  schemas:
+    # ── Envelope ──
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        data:
+          type: object
+        meta:
+          type: object
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error_code:
+          type: string
+          example: VALIDATION_ERROR
+        message:
+          type: string
+          example: Input tidak valid
+        errors:
+          type: object
+          nullable: true
+
+    PaginationMeta:
+      type: object
+      properties:
+        current_page:
+          type: integer
+        per_page:
+          type: integer
+        total:
+          type: integer
+        last_page:
+          type: integer
+
+    # ── Auth ──
+    UserResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        phone:
+          type: string
+          example: "+6281234567890"
+        email:
+          type: string
+          nullable: true
+        is_verified:
+          type: boolean
+        tier:
+          type: string
+          example: end_user
+        has_pin:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    TokenResource:
+      type: object
+      properties:
+        token:
+          type: string
+          description: Sanctum access token
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+
+    # ── Wallet ──
+    WalletResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        balance:
+          type: integer
+          description: Saldo dalam satuan sen (cents)
+          example: 500000
+        balance_display:
+          type: string
+          description: Saldo dalam format rupiah
+          example: "Rp 5.000,00"
+        updated_at:
+          type: string
+          format: date-time
+
+    MutationResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        type:
+          type: string
+          enum: [credit, debit]
+        amount:
+          type: integer
+          example: 10000
+        amount_display:
+          type: string
+          example: "Rp 100,00"
+        balance_after:
+          type: integer
+        reference_type:
+          type: string
+          example: transaction
+        reference_id:
+          type: integer
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+
+    TopupResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        amount:
+          type: integer
+          example: 10000000
+        amount_display:
+          type: string
+          example: "Rp 100.000,00"
+        method:
+          type: string
+          enum: [payment_gateway, manual_transfer]
+        payment_gateway:
+          type: string
+          nullable: true
+        gateway_ref:
+          type: string
+          nullable: true
+        payment_url:
+          type: string
+          nullable: true
+          description: URL untuk redirect ke halaman pembayaran gateway
+        status:
+          type: string
+          enum: [pending, paid, failed, expired]
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Product ──
+    CategoryResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+          example: Pulsa
+        code:
+          type: string
+          example: pulsa
+        icon_url:
+          type: string
+          nullable: true
+
+    ProductResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku_code:
+          type: string
+          example: TLS-5000
+        name:
+          type: string
+          example: Pulsa Telkomsel 5.000
+        description:
+          type: string
+          nullable: true
+        product_type:
+          type: string
+          enum: [prepaid, postpaid]
+        sell_price:
+          type: integer
+          description: Harga jual untuk tier user yang sedang login (dalam cents)
+          example: 600000
+        sell_price_display:
+          type: string
+          example: "Rp 6.000,00"
+        provider:
+          type: string
+          example: Telkomsel
+        category:
+          $ref: '#/components/schemas/CategoryResource'
+        is_active:
+          type: boolean
+
+    # ── Inquiry ──
+    InquiryResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        product:
+          $ref: '#/components/schemas/ProductResource'
+        customer_number:
+          type: string
+          example: "1234567890"
+        amount:
+          type: integer
+          description: Nominal tagihan dalam cents
+        amount_display:
+          type: string
+          example: "Rp 250.000,00"
+        admin_fee:
+          type: integer
+        admin_fee_display:
+          type: string
+        status:
+          type: string
+          enum: [pending, success, failed, expired]
+        expires_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+
+    # ── Transaction ──
+    TransactionResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        product:
+          $ref: '#/components/schemas/ProductResource'
+        customer_number:
+          type: string
+        amount:
+          type: integer
+        amount_display:
+          type: string
+        sell_price:
+          type: integer
+        sell_price_display:
+          type: string
+        status:
+          type: string
+          enum: [pending, processing, success, failed, refunded]
+        provider_ref:
+          type: string
+          nullable: true
+        failure_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    # ── PIN ──
+    PinTokenResource:
+      type: object
+      properties:
+        pin_verification_token:
+          type: string
+          description: Token sekali pakai, valid 5 menit
+          example: "a3f2c1d4e5b6..."
+        expires_at:
+          type: string
+          format: date-time
+
+# ─────────────────────────────────────────────
+# PATHS
+# ─────────────────────────────────────────────
+paths:
+
+  # ═══════════════════════════════
+  # AUTH
+  # ═══════════════════════════════
+
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Daftar akun baru
+      description: Buat akun baru dengan nomor HP. OTP akan dikirim ke WhatsApp.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, phone]
+              properties:
+                name:
+                  type: string
+                  example: Budi Santoso
+                phone:
+                  type: string
+                  example: "+6281234567890"
+                  description: Format E.164
+                email:
+                  type: string
+                  nullable: true
+      responses:
+        '201':
+          description: Akun berhasil dibuat, OTP dikirim ke WhatsApp
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          message:
+                            type: string
+                            example: OTP telah dikirim ke WhatsApp Anda
+        '422':
+          description: Validasi gagal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/otp/request:
+    post:
+      tags: [Auth]
+      summary: Kirim ulang OTP
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, type]
+              properties:
+                phone:
+                  type: string
+                  example: "+6281234567890"
+                type:
+                  type: string
+                  enum: [register, login, reset_pin]
+      responses:
+        '200':
+          description: OTP berhasil dikirim
+        '429':
+          description: Rate limit OTP
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/otp/verify:
+    post:
+      tags: [Auth]
+      summary: Verifikasi OTP dan login
+      description: Verifikasi OTP. Jika berhasil, mengembalikan Sanctum token.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, code, type]
+              properties:
+                phone:
+                  type: string
+                  example: "+6281234567890"
+                code:
+                  type: string
+                  example: "123456"
+                type:
+                  type: string
+                  enum: [register, login]
+                device_name:
+                  type: string
+                  example: iPhone 15 Pro
+      responses:
+        '200':
+          description: Login berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          user:
+                            $ref: '#/components/schemas/UserResource'
+                          token:
+                            $ref: '#/components/schemas/TokenResource'
+        '422':
+          description: OTP salah atau kedaluwarsa
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Data user yang sedang login
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Data user
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResource'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Logout (hapus token aktif)
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Logout berhasil
+
+  # ═══════════════════════════════
+  # SECURITY (PIN)
+  # ═══════════════════════════════
+
+  /security/pin:
+    post:
+      tags: [Security]
+      summary: Set PIN pertama kali
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [pin, pin_confirmation]
+              properties:
+                pin:
+                  type: string
+                  example: "123456"
+                  description: 6 digit angka
+                pin_confirmation:
+                  type: string
+                  example: "123456"
+      responses:
+        '200':
+          description: PIN berhasil diset
+        '422':
+          description: PIN tidak valid
+
+    put:
+      tags: [Security]
+      summary: Ganti PIN
+      description: Perlu pin_verification_token dari alur verify PIN lama
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-Pin-Token
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [new_pin, new_pin_confirmation]
+              properties:
+                new_pin:
+                  type: string
+                  example: "654321"
+                new_pin_confirmation:
+                  type: string
+                  example: "654321"
+      responses:
+        '200':
+          description: PIN berhasil diubah
+        '422':
+          description: PIN tidak valid atau token tidak valid
+
+  /security/pin/challenge:
+    post:
+      tags: [Security]
+      summary: Minta tantangan PIN (step 1 dari alur PIN)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [purpose]
+              properties:
+                purpose:
+                  type: string
+                  enum: [transaction, change_pin]
+      responses:
+        '200':
+          description: Challenge berhasil dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          challenge_id:
+                            type: string
+        '422':
+          description: PIN belum diset
+
+  /security/pin/verify:
+    post:
+      tags: [Security]
+      summary: Verifikasi PIN dan dapatkan token (step 2 dari alur PIN)
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [challenge_id, pin]
+              properties:
+                challenge_id:
+                  type: string
+                pin:
+                  type: string
+                  example: "123456"
+                  description: PIN 6 digit — HANYA dikirim di endpoint ini
+      responses:
+        '200':
+          description: PIN valid, token diterbitkan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/PinTokenResource'
+        '422':
+          description: PIN salah
+        '429':
+          description: Terlalu banyak percobaan PIN
+
+  # ═══════════════════════════════
+  # WALLET
+  # ═══════════════════════════════
+
+  /wallet:
+    get:
+      tags: [Wallet]
+      summary: Cek saldo dompet
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Data wallet
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/WalletResource'
+
+  /wallet/mutations:
+    get:
+      tags: [Wallet]
+      summary: Riwayat mutasi saldo
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+        - in: query
+          name: per_page
+          schema:
+            type: integer
+            default: 15
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [credit, debit]
+      responses:
+        '200':
+          description: Daftar mutasi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/MutationResource'
+                      meta:
+                        $ref: '#/components/schemas/PaginationMeta'
+
+  /wallet/topup:
+    post:
+      tags: [Wallet]
+      summary: Buat permintaan top-up saldo
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [amount, method]
+              properties:
+                amount:
+                  type: integer
+                  description: Nominal dalam cents
+                  example: 10000000
+                method:
+                  type: string
+                  enum: [payment_gateway, manual_transfer]
+                payment_gateway:
+                  type: string
+                  enum: [midtrans, xendit]
+                  description: Wajib diisi jika method = payment_gateway
+      responses:
+        '201':
+          description: Permintaan top-up dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TopupResource'
+        '409':
+          description: Idempotency conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validasi gagal
+
+  # ═══════════════════════════════
+  # PRODUCT
+  # ═══════════════════════════════
+
+  /products/categories:
+    get:
+      tags: [Product]
+      summary: Daftar kategori produk
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daftar kategori
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/CategoryResource'
+
+  /products:
+    get:
+      tags: [Product]
+      summary: Daftar produk per kategori/operator
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+            example: pulsa
+        - in: query
+          name: provider
+          schema:
+            type: string
+            example: telkomsel
+      responses:
+        '200':
+          description: Daftar produk dengan harga tier user yang login
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ProductResource'
+
+  # ═══════════════════════════════
+  # INQUIRY
+  # ═══════════════════════════════
+
+  /inquiry:
+    post:
+      tags: [Inquiry]
+      summary: Inquiry tagihan postpaid
+      description: |
+        Hanya untuk produk `product_type=postpaid`. Akan error untuk produk prepaid.
+        Hasil inquiry valid selama 10 menit.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_code, customer_number]
+              properties:
+                sku_code:
+                  type: string
+                  example: PLN-POSTPAID
+                customer_number:
+                  type: string
+                  example: "1234567890"
+      responses:
+        '200':
+          description: Hasil inquiry berhasil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/InquiryResource'
+        '422':
+          description: SKU prepaid atau customer number tidak valid
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '503':
+          description: Provider tidak tersedia
+
+  # ═══════════════════════════════
+  # TRANSACTION
+  # ═══════════════════════════════
+
+  /transactions:
+    get:
+      tags: [Transaction]
+      summary: Riwayat transaksi user
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: status
+          schema:
+            type: string
+            enum: [pending, processing, success, failed, refunded]
+      responses:
+        '200':
+          description: Daftar transaksi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/TransactionResource'
+                      meta:
+                        $ref: '#/components/schemas/PaginationMeta'
+
+    post:
+      tags: [Transaction]
+      summary: Buat transaksi baru
+      description: |
+        Endpoint ini memerlukan:
+        1. `Authorization: Bearer {token}` — user harus login
+        2. `X-Pin-Token: {token}` — dari POST /security/pin/verify
+        3. `Idempotency-Key: {key}` — wajib, mencegah transaksi ganda
+
+        Untuk produk **prepaid**: `amount` dari klien **diabaikan**, harga diambil dari server.
+        Untuk produk **postpaid**: `inquiry_id` wajib diisi, `amount` harus cocok dengan inquiry.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: header
+          name: X-Pin-Token
+          required: true
+          schema:
+            type: string
+          description: Token dari POST /security/pin/verify
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_code, customer_number]
+              properties:
+                sku_code:
+                  type: string
+                  example: TLS-5000
+                customer_number:
+                  type: string
+                  example: "081234567890"
+                inquiry_id:
+                  type: integer
+                  nullable: true
+                  description: Wajib untuk produk postpaid
+                amount:
+                  type: integer
+                  nullable: true
+                  description: Untuk postpaid wajib, harus cocok dengan inquiry. Untuk prepaid diabaikan.
+      responses:
+        '201':
+          description: Transaksi berhasil dibuat (mungkin masih pending/processing)
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TransactionResource'
+        '409':
+          description: Idempotency conflict — transaksi dengan key ini sudah ada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '422':
+          description: Validasi gagal (saldo kurang, PIN token tidak valid, dll)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /transactions/{id}:
+    get:
+      tags: [Transaction]
+      summary: Detail satu transaksi
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Detail transaksi
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TransactionResource'
+        '404':
+          description: Transaksi tidak ditemukan
+
+  # ═══════════════════════════════
+  # WEBHOOKS
+  # ═══════════════════════════════
+
+  /ppob/callback:
+    post:
+      tags: [Webhook]
+      summary: Callback dari provider PPOB
+      description: |
+        **Bukan untuk mobile app.** Endpoint ini hanya untuk provider PPOB.
+
+        Validasi berlapis (urutan):
+        1. mTLS (terminate di nginx)
+        2. X-Signature: HMAC-SHA256(secret, raw_body)
+        3. X-Timestamp: tolak jika |now - timestamp| > 300 detik
+        4. event_id: tolak duplikat dengan 409
+      parameters:
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+          description: "Format: sha256={hex_digest}"
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+          description: Unix timestamp
+        - in: header
+          name: X-Event-Id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                event_id:
+                  type: string
+                event_type:
+                  type: string
+                  example: payment_success
+                transaction_ref:
+                  type: string
+                provider_ref:
+                  type: string
+                status:
+                  type: string
+                data:
+                  type: object
+      responses:
+        '200':
+          description: Webhook diproses
+        '401':
+          description: Signature tidak valid
+        '409':
+          description: Event sudah diproses sebelumnya
+        '422':
+          description: Timestamp di luar toleransi
+
+  /wallet/callback:
+    post:
+      tags: [Webhook]
+      summary: Callback dari payment gateway untuk top-up
+      description: |
+        **Bukan untuk mobile app.** Endpoint ini untuk Midtrans/Xendit callback.
+        Validasi sama dengan /ppob/callback.
+      parameters:
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Callback diproses
+        '401':
+          description: Signature tidak valid
+        '409':
+          description: Event sudah diproses
+
+  # ═══════════════════════════════
+  # PARTNER (Open API)
+  # ═══════════════════════════════
+
+  /partner/transactions:
+    post:
+      tags: [Partner]
+      summary: Buat transaksi atas nama user (partner)
+      description: |
+        Semua header wajib diisi:
+        - `X-Api-Key`: API key partner
+        - `X-Timestamp`: Unix timestamp
+        - `X-Signature`: HMAC-SHA256 dari `METHOD\nPATH\nTIMESTAMP\nSHA256(body)`
+      parameters:
+        - in: header
+          name: X-Api-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: Idempotency-Key
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sku_code, customer_number, partner_user_ref]
+              properties:
+                sku_code:
+                  type: string
+                customer_number:
+                  type: string
+                partner_user_ref:
+                  type: string
+                  description: ID user di sistem partner
+                amount:
+                  type: integer
+                  nullable: true
+      responses:
+        '201':
+          description: Transaksi dibuat
+        '401':
+          description: API key atau signature tidak valid
+        '429':
+          description: Rate limit partner
+
+  /partner/transactions/{partner_ref}:
+    get:
+      tags: [Partner]
+      summary: Cek status transaksi via partner reference
+      parameters:
+        - in: path
+          name: partner_ref
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Api-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Status transaksi
+        '404':
+          description: Transaksi tidak ditemukan
