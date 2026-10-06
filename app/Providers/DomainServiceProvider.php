@@ -9,6 +9,7 @@ use App\Domain\Auth\Drivers\WaBizOtpDriver;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Services\InquiryService;
 use App\Domain\Ppob\Services\PpobService;
+use App\Domain\Transaction\Services\TransactionService;
 use App\Domain\Wallet\Drivers\FakeGatewayDriver;
 use App\Domain\Wallet\Drivers\MidtransGatewayDriver;
 use App\Domain\Wallet\Drivers\XenditGatewayDriver;
@@ -55,6 +56,7 @@ class DomainServiceProvider extends ServiceProvider
         // ─── Inquiry & PPOB Services ──────────────────────────────────────────
         $this->app->singleton(PpobService::class);
         $this->app->singleton(InquiryService::class);
+        $this->app->singleton(TransactionService::class);
     }
 
     public function boot(): void

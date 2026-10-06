@@ -9,6 +9,37 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ---
 
+## [v0.6.0] - 2026-10-06
+### Selesai: Phase 6 — Transaction Domain
+- **Added**:
+  - Model `Transaction`: Mendukung skema tabel terpartisi, relasi `user()`, `product()`, `inquiry()`, status helpers (`isPending()`, `isProcessing()`, `isSuccess()`, `isFailed()`, `isRefunded()`), dan atribut failover (ADR-005).
+  - Model `IdempotencyKey`: Model penyimpanan key idempotency per-user dengan relasi `user()`.
+  - Service `TransactionService`:
+    - Validasi keaktifan produk (`PRODUCT_INACTIVE`).
+    - Aturan prepaid: `amount` dari klien diabaikan, menggunakan harga server (`ProductPricingService`).
+    - Aturan postpaid: Wajib `inquiry_id` yang valid & belum kedaluwarsa (`INQUIRY_REQUIRED`, `INQUIRY_EXPIRED`), serta validasi kecocokan nominal (`INQUIRY_AMOUNT_MISMATCH`).
+    - Debit saldo atomik via `WalletService::debit()` dengan row locking `SELECT ... FOR UPDATE`.
+    - Routing queue asynchronous per-supplier sesuai ADR-002.
+    - Penanganan refund otomatis (`failAndRefund`) jika transaksi provider gagal.
+  - Jobs:
+    - `ProcessTransactionJob`: Eksekusi pembayaran ke provider via `PpobService::pay()`, penanganan kegagalan dengan auto-refund saldo, dan dispatch pengecekan status jika async.
+    - `CheckTransactionStatusJob`: Polling status berkala untuk provider async dan auto-refund jika status akhir gagal.
+  - Controller & Requests:
+    - `TransactionController`: `POST /transactions` (201 Created), `GET /transactions` (history paginasi & filter status), `GET /transactions/{id}` (404 `TRANSACTION_NOT_FOUND`).
+    - `CreateTransactionRequest`: Validasi input transaksi.
+    - `TransactionResource`: Representasi JSON OpenAPI termasuk nested `ProductResource`.
+    - Integrasi middleware berurutan: `IdempotencyMiddleware` kemudian `PinTokenMiddleware:transaction`.
+  - Feature tests:
+    - `TransactionIdempotencyTest` (3 test): Idempotency key required & 409 conflict replay data asli.
+    - `TransactionAmountValidationTest` (5 test): Prepaid client amount diabaikan, postpaid inquiry required, expired rejection, amount mismatch.
+    - `TransactionBalanceTest` (2 test): Insufficient balance 422 & valid balance debit dengan mutasi.
+    - `TransactionPinTest` (5 test): Header required, invalid, expired, used, dan single-use verification.
+    - `TransactionFlowTest` (5 test): Show detail, pagination history, filter status, product active check, cross-user isolation.
+    - `TransactionJobTest` (5 test): Async provider processing, failure auto-refund, polling check status.
+    - Total 25 test baru — suite keseluruhan kini 86 tests (329 assertions) 100% lulus.
+
+---
+
 ## [v0.5.0] - 2026-10-06
 ### Selesai: Phase 5 — Inquiry Domain
 - **Added**:

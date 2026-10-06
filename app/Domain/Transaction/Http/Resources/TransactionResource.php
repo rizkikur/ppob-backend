@@ -2,6 +2,7 @@
 
 namespace App\Domain\Transaction\Http\Resources;
 
+use App\Domain\Product\Http\Resources\ProductResource;
 use App\Domain\Transaction\Models\Transaction;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
@@ -13,6 +14,7 @@ class TransactionResource extends JsonResource
     {
         return [
             'id' => $this->id,
+            'product' => $this->product ? new ProductResource($this->product) : null,
             'customer_number' => $this->customer_number,
             'amount' => $this->amount_cents?->toCents(),
             'amount_display' => $this->amount_cents?->format(),

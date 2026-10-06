@@ -2,7 +2,9 @@
 
 namespace App\Domain\Transaction\Models;
 
+use App\Domain\Auth\Models\User;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
  * Model IdempotencyKey — penyimpanan idempotency key per user.
@@ -18,4 +20,9 @@ class IdempotencyKey extends Model
     protected $fillable = ['user_id', 'key_value', 'endpoint', 'response_code', 'response_body'];
 
     protected $casts = ['response_code' => 'integer', 'response_body' => 'array'];
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 }
