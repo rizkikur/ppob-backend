@@ -15,12 +15,14 @@ use Illuminate\Support\Facades\DB;
 
 /**
  * Service transaksi PPOB.
- * Aturan keras (lihat CLAUDE.md):
- * - Idempotency key wajib dicek sebelum proses
+ *
+ * Aturan keras (lihat CLAUDE.md & dev-roadmap.md):
+ * - Idempotency key wajib dicek sebelum proses (via IdempotencyMiddleware)
  * - PIN token sudah divalidasi oleh PinTokenMiddleware sebelum sampai sini
- * - Untuk prepaid: amount dari klien diabaikan
- * - Untuk postpaid: inquiry_id wajib, amount harus cocok
- * - Debit saldo HANYA via WalletService
+ * - Untuk prepaid: amount dari klien diabaikan, harga diambil dari server
+ * - Untuk postpaid: inquiry_id wajib, amount harus cocok persis dengan inquiry
+ * - Debit saldo HANYA via WalletService::debit() dengan row locking
+ * - Dispatch job ke queue provider per ADR-002
  */
 class TransactionService
 {
@@ -29,38 +31,72 @@ class TransactionService
         private readonly ProductPricingService $pricingService
     ) {}
 
-    /** @throws BusinessException */
-    public function create(User $user, Product $product, string $customerNumber, ?int $inquiryId = null, ?int $clientAmount = null): Transaction
-    {
+    /**
+     * Buat transaksi baru.
+     *
+     * @throws BusinessException
+     */
+    public function create(
+        User $user,
+        Product $product,
+        string $customerNumber,
+        ?int $inquiryId = null,
+        ?int $clientAmount = null
+    ): Transaction {
         if (! $product->is_active) {
             throw BusinessException::productInactive();
         }
+
         // Hitung harga jual untuk tier user ini
         $sellPrice = $this->pricingService->getPriceForUser($product, $user);
-        // Validasi postpaid
+
+        // Validasi postpaid vs prepaid
         $inquiry = null;
         if ($product->isPostpaid()) {
             if (! $inquiryId) {
                 throw BusinessException::inquiryRequired();
             }
-            $inquiry = Inquiry::findOrFail($inquiryId);
+
+            $inquiry = Inquiry::where('id', $inquiryId)
+                ->where('user_id', $user->id)
+                ->first();
+
+            if (! $inquiry) {
+                throw BusinessException::inquiryRequired();
+            }
+
+            if ($inquiry->product_id !== $product->id || $inquiry->customer_number !== $customerNumber) {
+                throw BusinessException::inquiryRequired();
+            }
+
             if (! $inquiry->isUsable()) {
                 throw BusinessException::inquiryExpired();
             }
-            if ($clientAmount !== null && $clientAmount !== $inquiry->amount_cents->toCents()) {
+
+            if ($clientAmount === null || $clientAmount !== $inquiry->amount_cents->toCents()) {
                 throw BusinessException::inquiryAmountMismatch();
             }
+
+            // Untuk postpaid: total tagihan + admin fee yang didebit dari saldo
+            $sellPrice = $inquiry->totalAmount();
+            $amount = $inquiry->amount_cents;
+        } else {
+            // Untuk prepaid: amount dari klien diabaikan, harga dari server
+            $amount = $product->base_price_cents ?? $sellPrice;
         }
-        $amount = $product->isPostpaid() ? $inquiry->amount_cents : $sellPrice;
 
         return DB::transaction(function () use ($user, $product, $customerNumber, $inquiry, $amount, $sellPrice) {
-            // Debit saldo via WalletService (bukan langsung ke Wallet model)
+            // Debit saldo via WalletService (bukan langsung update model Wallet)
             $mutation = $this->walletService->debit(
-                $user, $sellPrice,
+                $user,
+                $sellPrice,
                 WalletMutation::REF_TRANSACTION,
                 null,
                 "Pembelian {$product->name}"
             );
+
+            $idempotencyKey = request()->header('Idempotency-Key') ?? '';
+
             $transaction = Transaction::create([
                 'user_id' => $user->id,
                 'product_id' => $product->id,
@@ -69,14 +105,78 @@ class TransactionService
                 'amount_cents' => $amount->toCents(),
                 'sell_price_cents' => $sellPrice->toCents(),
                 'status' => Transaction::STATUS_PENDING,
-                'idempotency_key' => request()->header('Idempotency-Key'),
+                'idempotency_key' => $idempotencyKey,
             ]);
-            // Update referensi mutasi ke transaksi ini
+
+            // Hubungkan ID transaksi ke referensi mutasi dompet
             $mutation->update(['reference_id' => $transaction->id]);
-            // Dispatch job async untuk kirim ke provider
-            ProcessTransactionJob::dispatch($transaction)->onQueue('transactions');
+
+            // Dispatch job async ke queue provider (ADR-002)
+            $product->loadMissing('provider');
+            $queueName = $product->provider?->queue_name ?: 'transactions';
+            ProcessTransactionJob::dispatch($transaction)->onQueue($queueName);
 
             return $transaction;
+        });
+    }
+
+    /**
+     * Tandai transaksi berhasil.
+     */
+    public function markSuccess(Transaction $transaction, string $providerRef, ?array $response = null): Transaction
+    {
+        $transaction->update([
+            'status' => Transaction::STATUS_SUCCESS,
+            'provider_ref' => $providerRef,
+            'provider_response' => $response,
+        ]);
+
+        return $transaction;
+    }
+
+    /**
+     * Tandai transaksi sedang diproses provider (async).
+     */
+    public function markProcessing(Transaction $transaction, ?string $providerRef = null, ?array $response = null): Transaction
+    {
+        $transaction->update([
+            'status' => Transaction::STATUS_PROCESSING,
+            'provider_ref' => $providerRef ?? $transaction->provider_ref,
+            'provider_response' => $response ?? $transaction->provider_response,
+        ]);
+
+        return $transaction;
+    }
+
+    /**
+     * Batalkan transaksi dan refund saldo ke user.
+     */
+    public function failAndRefund(Transaction $transaction, string $reason, ?array $response = null): Transaction
+    {
+        return DB::transaction(function () use ($transaction, $reason, $response) {
+            /** @var Transaction $lockedTx */
+            $lockedTx = Transaction::where('id', $transaction->id)->lockForUpdate()->firstOrFail();
+
+            if (in_array($lockedTx->status, [Transaction::STATUS_SUCCESS, Transaction::STATUS_FAILED, Transaction::STATUS_REFUNDED], true)) {
+                return $lockedTx;
+            }
+
+            $lockedTx->update([
+                'status' => Transaction::STATUS_FAILED,
+                'failure_reason' => $reason,
+                'provider_response' => $response,
+            ]);
+
+            // Kembalikan dana via WalletService::credit (append-only ledger)
+            $this->walletService->credit(
+                $lockedTx->user,
+                $lockedTx->sell_price_cents,
+                WalletMutation::REF_REFUND,
+                $lockedTx->id,
+                "Pengembalian dana transaksi #{$lockedTx->id}: {$reason}"
+            );
+
+            return $lockedTx;
         });
     }
 }

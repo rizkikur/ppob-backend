@@ -29,11 +29,25 @@ class PpobService
         return $driver->pay($customerNumber, $product->sku_code, $amount, $transactionRef);
     }
 
+    /** Cek status transaksi (untuk provider async/polling). */
+    public function checkStatus(Product $product, string $providerRef): array
+    {
+        $driver = $this->resolveDriver($product);
+
+        return $driver->checkStatus($providerRef);
+    }
+
     /** Resolve driver berdasarkan provider.driver field. */
     private function resolveDriver(Product $product): PpobProviderInterface
     {
         $product->loadMissing('provider');
-        $driverClass = 'App\\Domain\\Ppob\\Drivers\\'.$product->provider->driver;
+        $driverName = $product->provider?->driver;
+
+        if (! $driverName) {
+            throw BusinessException::providerUnavailable($product->provider?->name ?? 'Unknown');
+        }
+
+        $driverClass = 'App\\Domain\\Ppob\\Drivers\\'.$driverName;
         if (! class_exists($driverClass)) {
             throw BusinessException::providerUnavailable($product->provider->name);
         }

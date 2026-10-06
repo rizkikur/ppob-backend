@@ -12,9 +12,23 @@ class PlnDriver implements PpobProviderInterface
 {
     private static ?array $mockInquiryResult = null;
 
+    private static ?array $mockPayResult = null;
+
+    private static ?array $mockCheckStatusResult = null;
+
     public static function setMockInquiry(?array $result): void
     {
         self::$mockInquiryResult = $result;
+    }
+
+    public static function setMockPay(?array $result): void
+    {
+        self::$mockPayResult = $result;
+    }
+
+    public static function setMockCheckStatus(?array $result): void
+    {
+        self::$mockCheckStatusResult = $result;
     }
 
     public function inquiry(string $customerNumber, string $productCode): array
@@ -43,6 +57,10 @@ class PlnDriver implements PpobProviderInterface
 
     public function pay(string $customerNumber, string $productCode, Money $amount, string $transactionRef): array
     {
+        if (self::$mockPayResult !== null) {
+            return self::$mockPayResult;
+        }
+
         return [
             'status' => 'success',
             'provider_ref' => 'PLN-PAY-'.time(),
@@ -52,6 +70,10 @@ class PlnDriver implements PpobProviderInterface
 
     public function checkStatus(string $providerRef): array
     {
+        if (self::$mockCheckStatusResult !== null) {
+            return self::$mockCheckStatusResult;
+        }
+
         return [
             'status' => 'success',
             'provider_ref' => $providerRef,

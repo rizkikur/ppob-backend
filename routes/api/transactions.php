@@ -8,10 +8,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/transactions', [TransactionController::class, 'index']);
     Route::get('/transactions/{id}', [TransactionController::class, 'show']);
-    // Buat transaksi: wajib PIN token + idempotency key
+    // Buat transaksi: wajib idempotency key + PIN token (IdempotencyMiddleware harus dieksekusi sebelum PinTokenMiddleware)
     Route::post('/transactions', [TransactionController::class, 'store'])
         ->middleware([
-            PinTokenMiddleware::class.':transaction',
             IdempotencyMiddleware::class,
+            PinTokenMiddleware::class.':transaction',
         ]);
 });

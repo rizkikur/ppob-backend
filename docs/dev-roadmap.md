@@ -116,17 +116,17 @@ Dependensi: Phase 3, Phase 5, Phase 2
 
 | No  | Item                                          | Status         | Catatan                                          |
 |-----|-----------------------------------------------|----------------|--------------------------------------------------|
-| 6.1 | Model: `Transaction`, `IdempotencyKey`        | ⬜ Belum       |                                                  |
-| 6.2 | Migration: partisi `transactions` per bulan   | ⬜ Belum       | Wajib pakai raw SQL `DB::statement`              |
-| 6.3 | Service: `TransactionService`                 | ⬜ Belum       | Validasi PIN token, idempotency, cek saldo, dispatch job |
-| 6.4 | Job: `ProcessTransactionJob`                  | ⬜ Belum       | Kirim ke provider, update status                 |
-| 6.5 | Job: `CheckTransactionStatusJob`              | ⬜ Belum       | Polling status jika provider async               |
-| 6.6 | Controller + Request: Transaction             | ⬜ Belum       |                                                  |
-| 6.7 | Feature test: idempotency transaksi           | ⬜ Belum       | **WAJIB** — request sama 2x, tolak kedua dengan 409 |
-| 6.8 | Feature test: validasi prepaid amount         | ⬜ Belum       | **WAJIB** — amount klien diabaikan untuk prepaid |
-| 6.9 | Feature test: validasi postpaid amount match  | ⬜ Belum       | **WAJIB** — amount tidak cocok → tolak          |
-| 6.10| Feature test: insufficient balance            | ⬜ Belum       |                                                  |
-| 6.11| Feature test: PIN token required              | ⬜ Belum       |                                                  |
+| 6.1 | Model: `Transaction`, `IdempotencyKey`        | ✅ Selesai     | Model transaksi terpartisi + relasi + status helper |
+| 6.2 | Migration: partisi `transactions` per bulan   | ✅ Selesai     | Raw SQL `DB::statement` di PostgreSQL + sqlite support |
+| 6.3 | Service: `TransactionService`                 | ✅ Selesai     | Idempotency, PIN, saldo via WalletService, queue per supplier |
+| 6.4 | Job: `ProcessTransactionJob`                  | ✅ Selesai     | Eksekusi bayar ke PpobService, update status, auto-refund |
+| 6.5 | Job: `CheckTransactionStatusJob`              | ✅ Selesai     | Polling status async provider & auto-refund jika gagal |
+| 6.6 | Controller + Request: Transaction             | ✅ Selesai     | `POST /transactions`, `GET /transactions`, `GET /transactions/{id}` |
+| 6.7 | Feature test: idempotency transaksi           | ✅ Selesai     | **WAJIB** — 3 test di `TransactionIdempotencyTest.php` (409 conflict)|
+| 6.8 | Feature test: validasi prepaid amount         | ✅ Selesai     | **WAJIB** — nominal klien diabaikan untuk prepaid |
+| 6.9 | Feature test: validasi postpaid amount match  | ✅ Selesai     | **WAJIB** — inquiry wajib & amount mismatch ditolak (422) |
+| 6.10| Feature test: insufficient balance            | ✅ Selesai     | 2 test di `TransactionBalanceTest.php` (422 & mutasi debit) |
+| 6.11| Feature test: PIN token required              | ✅ Selesai     | 5 test di `TransactionPinTest.php` (invalid, expired, used) |
 
 ---
 
