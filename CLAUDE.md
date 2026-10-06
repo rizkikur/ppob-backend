@@ -105,11 +105,18 @@ Setiap fitur yang menyentuh saldo/stok WAJIB punya Feature test untuk:
 
 Jangan tandai task selesai kalau test belum ditulis dan lulus.
 
-## Alur Kerja
-Satu sesi fokus ke satu domain sesuai urutan di `docs/dev-roadmap.md`. Setiap selesai satu item, update kolom **Status** di `docs/dev-roadmap.md`.
+## Alur Kerja Git & Task (Wajib Diikuti)
+Setiap pengerjaan fase atau fitur baru wajib mengikuti alur kerja berikut:
+1. **Feature Branch**: Sebelum mulai koding, buat branch baru dari `main` dengan format `feature/{phase-name}` (contoh: `feature/phase-5-inquiry`).
+2. **Implementasi & Testing**: Kerjakan task sesuai task spec, tulis Feature & Unit tests, jalankan `php artisan test` (harus 100% lulus), jalankan `vendor/bin/pint`, dan pastikan 0 file dengan UTF-8 BOM.
+3. **Dokumentasi & Changelog**:
+   - Catat rincian perubahan di `CHANGELOG.md` pada versi fase terkait.
+   - Update status item di `docs/dev-roadmap.md` ke `✅ Selesai`.
+4. **Commit Terstruktur**: Gunakan format Conventional Commits (contoh: `feat(inquiry): implement InquiryService and PlnDriver`).
+5. **Push & Pull Request (PR)**: Push branch ke GitHub (`git push -u origin feature/{phase-name}`) dan sediakan instruksi/link pembuatan PR untuk di-review dan di-ACC oleh user sebelum dimerge ke `main`.
 
 ## Yang TIDAK boleh dilakukan
-- Jangan commit langsung ke `main` — selalu lewat branch + PR, terutama untuk perubahan di `Wallet/`, `Transaction/`, dan migration.
+- Jangan commit langsung ke `main` — selalu lewat branch + PR, terutama untuk perubahan domain bisnis dan migration.
 - Jangan akses atau baca file `.env` production dalam sesi manapun.
 - Jangan generate kode yang mem-bypass validasi `Idempotency-Key` atau `pin_verification_token` "untuk mempercepat testing".
 - Jangan taruh file PHP dengan BOM — selalu simpan sebagai UTF-8 without BOM.
