@@ -74,7 +74,7 @@ class PartnerAuthMiddleware
                 'duration_ms' => $durationMs,
                 'ip_address' => $request->ip() ?? '127.0.0.1',
             ]);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             // Logging audit jangan sampai menggagalkan response
         }
     }

@@ -64,7 +64,7 @@ class Partner extends Model
     {
         try {
             return decrypt($this->secret);
-        } catch (\Throwable) {
+        } catch (\Throwable $e) {
             return $this->secret;
         }
     }
