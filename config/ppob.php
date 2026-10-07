@@ -88,4 +88,41 @@ return [
         'expire_minutes' => 10, // Inquiry kedaluwarsa setelah 10 menit
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Provider Queue Configuration (ADR-002)
+    |--------------------------------------------------------------------------
+    | Pemetaan queue Horizon & worker limit per supplier PPOB.
+    */
+    'queues' => [
+        'default' => 'transactions',
+        'suppliers' => [
+            'telkomsel' => [
+                'queue' => 'supplier_telkomsel',
+                'max_workers' => 100,
+                'timeout' => 60,
+            ],
+            'indosat' => [
+                'queue' => 'supplier_indosat',
+                'max_workers' => 50,
+                'timeout' => 60,
+            ],
+            'xl' => [
+                'queue' => 'supplier_xl',
+                'max_workers' => 50,
+                'timeout' => 60,
+            ],
+            'pln' => [
+                'queue' => 'supplier_pln',
+                'max_workers' => 30,
+                'timeout' => 60,
+            ],
+            'pdam' => [
+                'queue' => 'supplier_pdam',
+                'max_workers' => 20,
+                'timeout' => 60,
+            ],
+        ],
+    ],
+
 ];

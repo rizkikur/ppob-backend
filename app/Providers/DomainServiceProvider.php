@@ -8,6 +8,7 @@ use App\Domain\Auth\Drivers\FonnteOtpDriver;
 use App\Domain\Auth\Drivers\WaBizOtpDriver;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Services\InquiryService;
+use App\Domain\Ppob\Commands\InspectQueueCommand;
 use App\Domain\Ppob\Services\CircuitBreakerService;
 use App\Domain\Ppob\Services\PpobService;
 use App\Domain\Transaction\Services\TransactionService;
@@ -65,5 +66,11 @@ class DomainServiceProvider extends ServiceProvider
     {
         // Daftarkan model User domain sebagai provider autentikasi Sanctum
         config(['auth.providers.users.model' => User::class]);
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                InspectQueueCommand::class,
+            ]);
+        }
     }
 }
