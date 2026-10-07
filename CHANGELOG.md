@@ -9,6 +9,28 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ---
 
+## [v0.8.1] - 2026-10-07
+### Queue Worker & Horizon Config (ADR-002)
+- **Added**:
+  - Konfigurasi `config/horizon.php` dengan supervisor terisolasi per supplier sesuai kapasitas masing-masing:
+    - `supervisor-telkomsel` (queue: `supplier_telkomsel`, maxProcesses: 100)
+    - `supervisor-indosat` (queue: `supplier_indosat`, maxProcesses: 50)
+    - `supervisor-xl` (queue: `supplier_xl`, maxProcesses: 50)
+    - `supervisor-pln` (queue: `supplier_pln`, maxProcesses: 30)
+    - `supervisor-pdam` (queue: `supplier_pdam`, maxProcesses: 20)
+    - `supervisor-default` (queue: `default, transactions`, processes: 10)
+  - Konfigurasi supervisor server produksi di `deploy/supervisor/ppob-worker.conf` siap pakai untuk Linux/VPS.
+  - Pemetaan queue dan limit worker di `config/ppob.php` (`queues.suppliers`).
+  - Artisan Command `php artisan ppob:queue:status` untuk inspeksi alokasi worker dan validasi konfigurasi supplier secara real-time.
+  - Feature test `QueueWorkerHorizonTest`:
+    - Validasi struktur file `config/horizon.php`.
+    - Validasi file supervisor deployment `ppob-worker.conf`.
+    - Pengujian dispatch job `ProcessTransactionJob` secara dinamis ke queue spesifik supplier (`assertPushedOn`).
+    - Validasi eksekusi command `ppob:queue:status`.
+  - Total test suite bertambah menjadi 130 tests (480 assertions), 100% lulus.
+
+---
+
 ## [v0.8.0] - 2026-10-06
 ### Selesai: Phase 8 — Partner / Open API Domain
 - **Added**:
