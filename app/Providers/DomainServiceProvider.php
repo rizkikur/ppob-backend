@@ -8,9 +8,12 @@ use App\Domain\Auth\Drivers\FonnteOtpDriver;
 use App\Domain\Auth\Drivers\WaBizOtpDriver;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Services\InquiryService;
+use App\Domain\Ppob\Commands\CheckProviderHealthCommand;
 use App\Domain\Ppob\Commands\InspectQueueCommand;
 use App\Domain\Ppob\Services\CircuitBreakerService;
 use App\Domain\Ppob\Services\PpobService;
+use App\Domain\Security\Commands\CleanupExpiredTokensCommand;
+use App\Domain\Transaction\Commands\CleanupIdempotencyKeysCommand;
 use App\Domain\Transaction\Services\TransactionService;
 use App\Domain\Wallet\Drivers\FakeGatewayDriver;
 use App\Domain\Wallet\Drivers\MidtransGatewayDriver;
@@ -70,6 +73,9 @@ class DomainServiceProvider extends ServiceProvider
         if ($this->app->runningInConsole()) {
             $this->commands([
                 InspectQueueCommand::class,
+                CleanupIdempotencyKeysCommand::class,
+                CleanupExpiredTokensCommand::class,
+                CheckProviderHealthCommand::class,
             ]);
         }
     }
