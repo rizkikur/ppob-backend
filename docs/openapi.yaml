@@ -329,6 +329,113 @@ components:
           type: string
           format: date-time
 
+    # ── Partner ──
+    PartnerBalanceResource:
+      type: object
+      properties:
+        partner_id:
+          type: integer
+          example: 1
+        partner_name:
+          type: string
+          example: "PT Mitra Finansial Solusindo"
+        balance:
+          type: integer
+          description: Saldo deposit mitra dalam satuan cents
+          example: 1500000000
+        balance_display:
+          type: string
+          example: "Rp 15.000.000,00"
+        currency:
+          type: string
+          example: IDR
+
+    PartnerProductResource:
+      type: object
+      properties:
+        id:
+          type: integer
+        sku_code:
+          type: string
+          example: TSEL20K
+        name:
+          type: string
+          example: Telkomsel Pulsa 20.000
+        description:
+          type: string
+          nullable: true
+        product_type:
+          type: string
+          enum: [prepaid, postpaid]
+        price:
+          type: integer
+          description: Harga khusus partner dalam cents (ADR-006)
+          example: 2020000
+        price_display:
+          type: string
+          example: "Rp 20.200,00"
+        category:
+          type: object
+          nullable: true
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            slug:
+              type: string
+        is_active:
+          type: boolean
+
+    PartnerTransactionResource:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 101
+        partner_id:
+          type: integer
+          example: 1
+        sku_code:
+          type: string
+          example: TSEL20K
+        product_name:
+          type: string
+          example: Telkomsel Pulsa 20.000
+        customer_number:
+          type: string
+          example: "081234567890"
+        amount:
+          type: integer
+          nullable: true
+        amount_display:
+          type: string
+          nullable: true
+        price:
+          type: integer
+          description: Harga beli partner dalam cents
+          example: 2020000
+        price_display:
+          type: string
+          example: "Rp 20.200,00"
+        status:
+          type: string
+          enum: [pending, processing, success, failed, refunded]
+        idempotency_key:
+          type: string
+        provider_ref:
+          type: string
+          nullable: true
+        failure_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
 # ─────────────────────────────────────────────
 # PATHS
 # ─────────────────────────────────────────────
@@ -1080,15 +1187,116 @@ paths:
   # PARTNER (Open API)
   # ═══════════════════════════════
 
+  /partner/balance:
+    get:
+      tags: [Partner]
+      summary: Cek saldo deposit mitra
+      description: |
+        Mengambil saldo deposit partner saat ini dari dompet terhubung.
+        Wajib menyertakan header autentikasi partner:
+        - `X-Api-Key`: API key partner
+        - `X-Timestamp`: Unix timestamp (toleransi 300 detik)
+        - `X-Signature`: HMAC-SHA256(`partner.secret`, `METHOD\nPATH\nTIMESTAMP\nSHA256(raw_body)`)
+      parameters:
+        - in: header
+          name: X-Api-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Saldo mitra berhasil diambil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/PartnerBalanceResource'
+        '401':
+          description: API key tidak valid atau signature salah (PARTNER_KEY_INVALID / PARTNER_SIGNATURE_INVALID)
+        '403':
+          description: IP tidak terdaftar dalam whitelist (PARTNER_IP_BLOCKED)
+        '422':
+          description: Timestamp kedaluwarsa (WEBHOOK_TIMESTAMP_INVALID)
+        '429':
+          description: Rate limit RPM terlampaui (PARTNER_RATE_LIMITED)
+
+  /partner/products:
+    get:
+      tags: [Partner]
+      summary: Katalog produk dengan harga jual khusus partner
+      description: |
+        Mengambil daftar produk aktif beserta harga beli khusus partner (ADR-006: flat rate partner_product_prices atau fallback base_price + admin_fee).
+      parameters:
+        - in: query
+          name: category
+          schema:
+            type: string
+          description: "Filter berdasarkan slug kategori (contoh: pulsa, token_listrik)"
+        - in: query
+          name: type
+          schema:
+            type: string
+            enum: [prepaid, postpaid]
+          description: "Filter tipe produk"
+        - in: header
+          name: X-Api-Key
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Timestamp
+          required: true
+          schema:
+            type: string
+        - in: header
+          name: X-Signature
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Daftar produk berhasil diambil
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/PartnerProductResource'
+        '401':
+          description: Autentikasi gagal
+        '403':
+          description: IP diblokir
+        '429':
+          description: Rate limit partner
+
   /partner/transactions:
     post:
       tags: [Partner]
-      summary: Buat transaksi atas nama user (partner)
+      summary: Buat transaksi PPOB atas nama partner
       description: |
+        Membuat transaksi baru dengan memotong saldo deposit mitra secara atomik.
         Semua header wajib diisi:
         - `X-Api-Key`: API key partner
-        - `X-Timestamp`: Unix timestamp
-        - `X-Signature`: HMAC-SHA256 dari `METHOD\nPATH\nTIMESTAMP\nSHA256(body)`
+        - `X-Timestamp`: Unix timestamp (toleransi 300 detik)
+        - `X-Signature`: HMAC-SHA256 dari `METHOD\nPATH\nTIMESTAMP\nSHA256(raw_body)`
+        - `Idempotency-Key`: Key unik transaksi partner (maks 100 karakter)
       parameters:
         - in: header
           name: X-Api-Key
@@ -1116,36 +1324,55 @@ paths:
           application/json:
             schema:
               type: object
-              required: [sku_code, customer_number, partner_user_ref]
+              required: [sku_code, customer_number]
               properties:
                 sku_code:
                   type: string
+                  example: TSEL20K
                 customer_number:
                   type: string
-                partner_user_ref:
-                  type: string
-                  description: ID user di sistem partner
+                  example: "081234567890"
+                inquiry_id:
+                  type: integer
+                  nullable: true
+                  description: Wajib untuk produk pascabayar (postpaid)
                 amount:
                   type: integer
                   nullable: true
+                  description: Wajib untuk produk pascabayar (harus cocok dengan hasil inquiry)
       responses:
         '201':
-          description: Transaksi dibuat
+          description: Transaksi berhasil dibuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/PartnerTransactionResource'
         '401':
           description: API key atau signature tidak valid
+        '404':
+          description: Produk dengan SKU tersebut tidak ditemukan
+        '409':
+          description: Idempotency conflict — request dengan key ini sudah pernah diproses
+        '422':
+          description: Saldo tidak mencukupi atau produk nonaktif (INSUFFICIENT_BALANCE / PRODUCT_INACTIVE)
         '429':
-          description: Rate limit partner
+          description: Rate limit partner terlampaui
 
-  /partner/transactions/{partner_ref}:
+  /partner/transactions/{partnerRef}:
     get:
       tags: [Partner]
-      summary: Cek status transaksi via partner reference
+      summary: Cek status transaksi via ID transaksi atau Idempotency-Key
       parameters:
         - in: path
-          name: partner_ref
+          name: partnerRef
           required: true
           schema:
             type: string
+          description: Numeric ID transaksi atau Idempotency-Key
         - in: header
           name: X-Api-Key
           required: true
@@ -1163,6 +1390,16 @@ paths:
             type: string
       responses:
         '200':
-          description: Status transaksi
+          description: Data transaksi ditemukan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - properties:
+                      data:
+                        $ref: '#/components/schemas/PartnerTransactionResource'
+        '401':
+          description: Autentikasi gagal
         '404':
-          description: Transaksi tidak ditemukan
+          description: Transaksi tidak ditemukan atau bukan milik partner ini
