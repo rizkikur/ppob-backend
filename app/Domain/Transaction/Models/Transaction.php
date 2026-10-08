@@ -11,6 +11,7 @@ use App\Domain\Product\Models\Provider;
 use App\Domain\Shared\Casts\MoneyCast;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * Model Transaction — transaksi PPOB.

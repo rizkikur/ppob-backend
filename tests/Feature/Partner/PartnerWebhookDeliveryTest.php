@@ -271,6 +271,8 @@ class PartnerWebhookDeliveryTest extends TestCase
 
         $delivery = WebhookDelivery::where('transaction_id', $tx->id)->first();
         $this->assertNotNull($delivery);
+        $this->assertCount(1, $tx->webhookDeliveries);
+        $this->assertEquals($delivery->id, $tx->webhookDeliveries->first()->id);
 
         $job = new DeliverWebhookJob($delivery->id);
         $job->handle();
