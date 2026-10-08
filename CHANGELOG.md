@@ -7,6 +7,29 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ## [Unreleased]
 
+## [v0.9.0] - 2026-10-07
+### Deployment & Scheduled Maintenance Jobs
+- **Added**:
+  - **Docker Production Stack**:
+    - `Dockerfile`: Multi-stage PHP 8.3-FPM Alpine dengan ekstensi lengkap (`pdo_pgsql`, `pgsql`, `bcmath`, `redis`, `opcache`, `pcntl`, `posix`, `zip`, `intl`) via `install-php-extensions`.
+    - `docker/php/php.ini` & `docker/php/opcache.ini`: Tuning performa produksi untuk high-throughput PPOB.
+    - `docker/nginx/default.conf`: Nginx reverse proxy dengan security headers, caching, gzip, dan FastCGI forwarding ke PHP-FPM.
+    - `docker/entrypoint.sh`: Otomasi permission direktori storage/cache dan proses bootstrap container.
+    - `docker-compose.yml`: Orkestrasi 6 service produksi (`app`, `web`, `db` PostgreSQL 16 Alpine, `redis` Redis 7 Alpine, `queue` worker terisolasi ADR-002, dan `scheduler`).
+    - `.env.docker.example` & `.dockerignore`: Konfigurasi variabel lingkungan container dan optimalisasi build context.
+  - **Scheduled Maintenance Jobs**:
+    - `App\Domain\Transaction\Commands\CleanupIdempotencyKeysCommand` (`ppob:cleanup:idempotency`): Pruning record `idempotency_keys` yang melewati masa retensi (default 30 hari).
+    - `App\Domain\Security\Commands\CleanupExpiredTokensCommand` (`ppob:cleanup:tokens`): Pruning kode OTP dan PIN verification tokens yang kadaluarsa/sudah terpakai (default retensi 24 jam).
+    - `App\Domain\Ppob\Commands\CheckProviderHealthCommand` (`ppob:health:check`): Monitoring status provider PPOB dan Circuit Breaker (ADR-003) dengan opsi `--strict` exit code.
+  - **Scheduler Configuration**:
+    - Didaftarkan di `routes/console.php` dengan locking `withoutOverlapping()` dan `runInBackground()`:
+      - `ppob:cleanup:idempotency --days=30` setiap hari pukul 02:00.
+      - `ppob:cleanup:tokens --hours=24` setiap jam.
+      - `ppob:health:check` setiap 5 menit.
+  - **Testing**:
+    - Feature test `ScheduledCleanupTest` memverifikasi pruning idempotency key, pembersihan OTP & PIN token kadaluarsa, serta pemantauan circuit breaker provider (semua skenario sukses dan strict failure).
+    - Test suite bertambah menjadi 134 tests (500 assertions), 100% lulus.
+
 ---
 
 ## [v0.8.1] - 2026-10-07
