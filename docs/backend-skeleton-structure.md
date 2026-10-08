@@ -160,21 +160,39 @@ laravel-project/
 │   │   │   │   ├── XlDriver.php             # Pulsa & Paket Data XL/Axis
 │   │   │   │   ├── PlnDriver.php            # Token & Tagihan PLN
 │   │   │   │   └── PdamDriver.php           # Tagihan PDAM
+│   │   │   ├── DTOs/
+│   │   │   │   └── ResolvedRoute.php        # DTO hasil resolusi rute supplier (ADR-004)
 │   │   │   ├── Http/
 │   │   │   │   └── Controllers/
 │   │   │   │       └── WebhookController.php  # Menerima callback dari provider
+│   │   │   ├── Models/
+│   │   │   │   └── ProductSupplierRoute.php # Pemetaan multi-supplier per produk (ADR-004)
 │   │   │   └── Services/
-│   │   │       └── PpobService.php          # Routing ke driver yang tepat
+│   │   │       ├── CircuitBreakerService.php # Circuit Breaker per-supplier (ADR-003)
+│   │   │       ├── PpobService.php          # Routing ke driver yang tepat
+│   │   │       └── SupplierRoutingService.php # Failover routing multi-supplier (ADR-004/005)
 │   │   │
 │   │   └── Partner/                         # Domain Open API partner
+│   │       ├── Commands/
+│   │       │   └── RetryFailedWebhooksCommand.php # Scheduler re-dispatch callback (ADR-008)
 │   │       ├── Http/
 │   │       │   ├── Controllers/
 │   │       │   │   └── PartnerController.php
-│   │       │   └── Middleware/
-│   │       │       └── PartnerAuthMiddleware.php  # Validasi API Key + HMAC
+│   │       │   ├── Middleware/
+│   │       │   │   └── PartnerAuthMiddleware.php  # Validasi API Key + HMAC
+│   │       │   ├── Requests/
+│   │       │   │   └── CreatePartnerTransactionRequest.php
+│   │       │   └── Resources/
+│   │       │       ├── PartnerProductResource.php
+│   │       │       └── PartnerTransactionResource.php
+│   │       ├── Jobs/
+│   │       │   └── DeliverWebhookJob.php    # Async callback retry exponential backoff (ADR-008)
 │   │       ├── Models/
 │   │       │   ├── Partner.php
-│   │       │   └── PartnerLog.php
+│   │       │   ├── PartnerLog.php
+│   │       │   ├── PartnerProductPrice.php  # Harga flat khusus partner (ADR-006)
+│   │       │   ├── PartnerRoutingRule.php   # Aturan failover per partner (ADR-004)
+│   │       │   └── WebhookDelivery.php      # Tracking retry webhook partner (ADR-008)
 │   │       └── Services/
 │   │           └── PartnerAuthService.php
 │   │
@@ -204,7 +222,14 @@ laravel-project/
 │   │   ├── 2026_10_01_000014_create_idempotency_keys_table.php
 │   │   ├── 2026_10_01_000015_create_processed_webhook_events_table.php
 │   │   ├── 2026_10_01_000016_create_partners_table.php
-│   │   └── 2026_10_01_000017_create_partner_logs_table.php
+│   │   ├── 2026_10_01_000017_create_partner_logs_table.php
+│   │   ├── 2026_10_05_000001_add_adr_columns_to_existing_tables.php
+│   │   ├── 2026_10_05_000002_create_routing_tables.php
+│   │   ├── 2026_10_05_000003_create_partner_product_prices_table.php
+│   │   ├── 2026_10_05_000004_create_webhook_deliveries_table.php
+│   │   ├── 2026_10_05_000005_create_monitoring_tables.php
+│   │   └── 2026_10_06_000001_add_user_id_to_partners_table.php
+
 │   └── seeders/
 │       ├── DatabaseSeeder.php
 │       ├── UserTierSeeder.php

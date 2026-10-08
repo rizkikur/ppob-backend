@@ -264,6 +264,7 @@ CREATE TRIGGER wallet_mutations_immutable
 | provider_ref         | varchar(100) | NULLABLE                 | Referensi dari provider PPOB                              |
 | provider_response    | jsonb        | NULLABLE                 | Response mentah terakhir dari provider                    |
 | failure_reason       | varchar(255) | NULLABLE                 |                                                           |
+| partner_id           | bigint       | NULLABLE                 | FK → partners.id (null jika direct mobile user)           |
 | created_at           | timestamptz  | NOT NULL                 | **Kunci partisi — tidak boleh diubah setelah INSERT**     |
 | updated_at           | timestamptz  | NOT NULL                 |                                                           |
 
@@ -276,6 +277,10 @@ CREATE TABLE transactions (
     user_id          BIGINT NOT NULL,
     product_id       BIGINT NOT NULL,
     inquiry_id       BIGINT,
+    supplier_id      BIGINT,
+    original_supplier_id BIGINT,
+    is_failover      BOOLEAN NOT NULL DEFAULT false,
+    partner_id       BIGINT,
     customer_number  VARCHAR(50) NOT NULL,
     amount_cents     BIGINT NOT NULL,
     sell_price_cents BIGINT NOT NULL,
@@ -297,7 +302,7 @@ CREATE TABLE transactions_2026_11 PARTITION OF transactions
 -- dst...
 ```
 
-**Index:** `(user_id, created_at DESC)`, `idempotency_key` (per partisi), `(status, created_at)`
+**Index:** `(user_id, created_at DESC)`, `idempotency_key` (per partisi), `(status, created_at)`, `partner_id`
 
 ### `idempotency_keys`
 | Kolom         | Tipe         | Constraint              | Keterangan                                     |
@@ -330,6 +335,49 @@ CREATE TABLE transactions_2026_11 PARTITION OF transactions
 
 **Index:** `event_id` (UNIQUE)
 
+### `product_supplier_routes`
+| Kolom        | Tipe         | Constraint              | Keterangan                                                     |
+|--------------|--------------|-------------------------|----------------------------------------------------------------|
+| id           | bigserial    | PK                      |                                                                |
+| product_id   | bigint       | FK → products.id        | Produk yang dilayani                                           |
+| provider_id  | bigint       | FK → providers.id       | Supplier yang menyediakan                                      |
+| priority     | smallint     | NOT NULL DEFAULT 1      | 1 = utama, makin besar makin rendah prioritasnya (ADR-004)     |
+| is_active    | boolean      | NOT NULL DEFAULT true   | Status aktif rute supplier                                     |
+| created_at   | timestamptz  | NOT NULL                |                                                                |
+| updated_at   | timestamptz  | NOT NULL                |                                                                |
+
+**Unique:** `(product_id, provider_id)`  
+**Index:** `(product_id, priority)`
+
+### `partner_routing_rules`
+| Kolom                 | Tipe         | Constraint                 | Keterangan                                                     |
+|-----------------------|--------------|----------------------------|----------------------------------------------------------------|
+| id                    | bigserial    | PK                         |                                                                |
+| partner_id            | bigint       | FK → partners.id           | Mitra pemilik aturan                                           |
+| category_code         | varchar(30)  | NULLABLE                   | Kode kategori produk (null = aturan global mitra) (ADR-004)    |
+| preferred_provider_id | bigint       | NULLABLE, FK → providers.id| Supplier pilihan partner (null = default sistem)               |
+| allow_failover        | boolean      | NOT NULL DEFAULT false     | Izinkan pindah supplier jika supplier utama down (ADR-004)     |
+| failover_policy       | varchar(20)  | NOT NULL DEFAULT 'none'    | `none`, `same_category`, `any`                                 |
+| created_at            | timestamptz  | NOT NULL                   |                                                                |
+| updated_at            | timestamptz  | NOT NULL                   |                                                                |
+
+**Unique:** `(partner_id, category_code)`  
+**Index:** `partner_id`
+
+### `supplier_balances`
+| Kolom         | Tipe         | Constraint              | Keterangan                                                     |
+|---------------|--------------|-------------------------|----------------------------------------------------------------|
+| id            | bigserial    | PK                      |                                                                |
+| provider_id   | bigint       | FK → providers.id       | Supplier yang dimonitor                                        |
+| balance_cents | bigint       | NOT NULL                | Saldo deposit supplier dalam satuan cents (ADR-009)            |
+| source        | varchar(10)  | NOT NULL DEFAULT 'manual'| `api` (auto pull) atau `manual` (input admin)                  |
+| checked_at    | timestamptz  | NOT NULL                | Waktu pengecekan saldo                                         |
+| raw_response  | text         | NULLABLE                | Response mentah API supplier (audit)                           |
+| created_at    | timestamptz  | NOT NULL                |                                                                |
+| updated_at    | timestamptz  | NOT NULL                |                                                                |
+
+**Index:** `(provider_id, checked_at DESC)`
+
 ---
 
 ## Domain: Partner
@@ -339,13 +387,14 @@ CREATE TABLE transactions_2026_11 PARTITION OF transactions
 |------------------------|--------------|-------------------------|---------------------------------------------------------------|
 | id                     | bigserial    | PK                      |                                                               |
 | name                   | varchar(100) | NOT NULL                |                                                               |
+| user_id                | bigint       | NULLABLE, FK → users.id | User akun wallet pemilik mitra H2H (ADR-006)                  |
 | api_key                | varchar(64)  | NOT NULL, UNIQUE        | Random hex 32-byte                                            |
 | secret                 | varchar(255) | NOT NULL                | Random hex 32-byte, disimpan terenkripsi (Laravel encrypt)    |
 | allowed_ips            | jsonb        | NULLABLE                | Array IP whitelist, null = semua IP diizinkan                 |
 | protocol               | varchar(20)  | NOT NULL DEFAULT 'json' | `json` / `otomax` / `irs` (ADR-006)                          |
 | response_mode          | varchar(10)  | NOT NULL DEFAULT 'async'| `sync` / `async` — cara response ke klien (ADR-007)          |
 | response_timeout_ms    | integer      | NOT NULL DEFAULT 5000   | Maks waktu tunggu untuk mode sync (ADR-007)                   |
-| callback_url           | varchar(255) | NULLABLE                | URL untuk notif async setelah transaksi selesai (ADR-007)     |
+| callback_url           | varchar(500) | NULLABLE                | URL untuk notif async setelah transaksi selesai (ADR-007)     |
 | callback_secret        | varchar(255) | NULLABLE                | Secret untuk HMAC signature di callback (ADR-007)             |
 | is_active              | boolean      | NOT NULL DEFAULT true   |                                                               |
 | rate_limit_rpm         | integer      | NOT NULL DEFAULT 60     | Request per menit                                             |
@@ -367,23 +416,104 @@ CREATE TABLE transactions_2026_11 PARTITION OF transactions
 
 **Index:** `(partner_id, created_at DESC)` — untuk audit trail
 
+### `partner_product_prices`
+| Kolom            | Tipe         | Constraint              | Keterangan                                                  |
+|------------------|--------------|-------------------------|-------------------------------------------------------------|
+| id               | bigserial    | PK                      |                                                             |
+| partner_id       | bigint       | FK → partners.id        | Mitra H2H                                                   |
+| product_id       | bigint       | FK → products.id        | Produk PPOB                                                 |
+| sell_price_cents | bigint       | NOT NULL, CHECK > 0     | Harga jual flat khusus untuk mitra ini (ADR-006)            |
+| is_active        | boolean      | NOT NULL DEFAULT true   |                                                             |
+| created_at       | timestamptz  | NOT NULL                |                                                             |
+| updated_at       | timestamptz  | NOT NULL                |                                                             |
+
+**Unique:** `(partner_id, product_id)`  
+**Index:** `partner_id`
+
+### `webhook_deliveries`
+| Kolom          | Tipe         | Constraint              | Keterangan                                                  |
+|----------------|--------------|-------------------------|-------------------------------------------------------------|
+| id             | bigserial    | PK                      |                                                             |
+| partner_id     | bigint       | FK → partners.id        | Mitra tujuan callback                                       |
+| transaction_id | bigint       | NOT NULL                | ID transaksi (raw bigint, partitioned table) (ADR-008)      |
+| attempt        | smallint     | NOT NULL DEFAULT 1      | Percobaan ke-1 s/d ke-5 (ADR-008)                           |
+| status         | varchar(30)  | NOT NULL DEFAULT 'pending'| `pending`, `delivered`, `failed`, `failed_permanent`        |
+| callback_url   | varchar(500) | NOT NULL                | Endpoint URL webhook milik mitra                            |
+| response_code  | smallint     | NULLABLE                | Status kode HTTP response dari mitra                        |
+| response_body  | text         | NULLABLE                | Body response yang dikembalikan mitra                       |
+| next_retry_at  | timestamptz  | NULLABLE                | Jadwal kirim ulang (exponential backoff) (ADR-008)          |
+| delivered_at   | timestamptz  | NULLABLE                | Timestamp ketika webhook berhasil diterima (2xx)            |
+| created_at     | timestamptz  | NOT NULL                |                                                             |
+| updated_at     | timestamptz  | NOT NULL                |                                                             |
+
+**Index:** `(status, next_retry_at)`, `(partner_id, transaction_id)`
+
+---
+
+## Domain: Monitoring
+
+### `reconciliation_reports`
+| Kolom                       | Tipe         | Constraint              | Keterangan                                                  |
+|-----------------------------|--------------|-------------------------|-------------------------------------------------------------|
+| id                          | bigserial    | PK                      |                                                             |
+| provider_id                 | bigint       | FK → providers.id       | Supplier yang direkonsiliasi                                |
+| report_date                 | date         | NOT NULL                | Tanggal cut-off rekonsiliasi (ADR-010)                      |
+| status                      | varchar(20)  | NOT NULL DEFAULT 'running'| `running`, `clean`, `discrepancy`, `error`                 |
+| total_transactions_local    | integer      | NOT NULL DEFAULT 0      | Total transaksi sukses di sistem lokal                      |
+| total_transactions_supplier | integer      | NOT NULL DEFAULT 0      | Total transaksi menurut laporan supplier                    |
+| discrepancy_count           | integer      | NOT NULL DEFAULT 0      | Jumlah transaksi yang tidak cocok                           |
+| discrepancy_amount_cents    | bigint       | NOT NULL DEFAULT 0      | Total nilai nominal selisih (cents)                         |
+| notes                       | text         | NULLABLE                | Catatan rekonsiliasi                                        |
+| completed_at                | timestamptz  | NULLABLE                | Waktu proses rekonsiliasi selesai                           |
+| created_at                  | timestamptz  | NOT NULL                |                                                             |
+| updated_at                  | timestamptz  | NOT NULL                |                                                             |
+
+**Unique:** `(provider_id, report_date)`  
+**Index:** `report_date`
+
+### `reconciliation_discrepancies`
+| Kolom                    | Tipe         | Constraint                      | Keterangan                                                  |
+|--------------------------|--------------|---------------------------------|-------------------------------------------------------------|
+| id                       | bigserial    | PK                              |                                                             |
+| reconciliation_report_id | bigint       | FK → reconciliation_reports.id  | Laporan rekonsiliasi induk                                  |
+| transaction_id           | bigint       | NULLABLE                        | ID transaksi lokal (null jika ada di supplier saja)         |
+| supplier_ref             | varchar(100) | NULLABLE                        | ID transaksi supplier (null jika ada di lokal saja)         |
+| discrepancy_type         | varchar(30)  | NOT NULL                        | `missing_local`, `missing_supplier`, `amount_mismatch`, `status_mismatch` |
+| local_amount_cents       | bigint       | NULLABLE                        | Nominal transaksi di sistem lokal                           |
+| supplier_amount_cents    | bigint       | NULLABLE                        | Nominal transaksi di laporan supplier                       |
+| local_status             | varchar(20)  | NULLABLE                        | Status di sistem lokal                                      |
+| supplier_status          | varchar(20)  | NULLABLE                        | Status di sistem supplier                                   |
+| resolution               | varchar(20)  | NOT NULL DEFAULT 'unresolved'   | `unresolved`, `resolved_manual`, `resolved_auto`, `ignored` |
+| resolution_notes         | text         | NULLABLE                        | Catatan tindakan penyelesaian                               |
+| created_at               | timestamptz  | NOT NULL                        |                                                             |
+| updated_at               | timestamptz  | NOT NULL                        |                                                             |
+
+**Index:** `reconciliation_report_id`, `resolution`
+
 ---
 
 ## Relasi Antar Domain (Ringkasan)
 
 ```
 user_tiers ──< users >── wallets ──< wallet_mutations
-                │
-                ├──< otp_codes
-                ├──< pin_verification_tokens
-                ├──< topup_requests
-                ├──< inquiries >── products >── product_categories
-                │                              └── providers
-                ├──< transactions >── inquiries
-                └──< idempotency_keys
+                 │          │
+                 │          └──< topup_requests
+                 ├──< otp_codes
+                 ├──< pin_verification_tokens
+                 ├──< partners (user_id) ──< partner_logs
+                 │         │             ──< partner_routing_rules >── providers (preferred)
+                 │         │             ──< partner_product_prices >── products
+                 │         │             ──< webhook_deliveries
+                 │         │
+                 │         └──< transactions >── inquiries
+                 │                   │       └── providers (supplier_id / original_supplier_id)
+                 │                   └── partners (partner_id)
+                 ├──< inquiries >── products >── product_categories
+                 │                     │     └── providers ──< supplier_balances
+                 │                     │            │        ──< reconciliation_reports ──< reconciliation_discrepancies
+                 │                     ├──< product_supplier_routes >── providers
+                 │                     └──< product_tier_prices >── user_tiers
+                 └──< idempotency_keys
 
-partners ──< partner_logs
 processed_webhook_events (standalone)
-product_tier_prices >── products
-product_tier_prices >── user_tiers
 ```
