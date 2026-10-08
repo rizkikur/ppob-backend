@@ -8,6 +8,7 @@ use App\Domain\Auth\Drivers\FonnteOtpDriver;
 use App\Domain\Auth\Drivers\WaBizOtpDriver;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Services\InquiryService;
+use App\Domain\Partner\Commands\RetryFailedWebhooksCommand;
 use App\Domain\Ppob\Commands\CheckProviderHealthCommand;
 use App\Domain\Ppob\Commands\InspectQueueCommand;
 use App\Domain\Ppob\Services\CircuitBreakerService;
@@ -77,7 +78,9 @@ class DomainServiceProvider extends ServiceProvider
                 CleanupIdempotencyKeysCommand::class,
                 CleanupExpiredTokensCommand::class,
                 CheckProviderHealthCommand::class,
+                RetryFailedWebhooksCommand::class,
             ]);
         }
+
     }
 }

@@ -65,12 +65,40 @@ class Partner extends Model
         return $this->hasMany(PartnerRoutingRule::class);
     }
 
+    public function webhookDeliveries(): HasMany
+    {
+        return $this->hasMany(WebhookDelivery::class);
+    }
+
+    public function isAsync(): bool
+    {
+        return ($this->response_mode ?? 'async') === 'async';
+    }
+
+    public function isSync(): bool
+    {
+        return ($this->response_mode ?? 'async') === 'sync';
+    }
+
     public function getSecretDecrypted(): string
     {
         try {
             return decrypt($this->secret);
         } catch (\Throwable $e) {
             return $this->secret;
+        }
+    }
+
+    public function getCallbackSecretDecrypted(): ?string
+    {
+        if (! $this->callback_secret) {
+            return $this->getSecretDecrypted();
+        }
+
+        try {
+            return decrypt($this->callback_secret);
+        } catch (\Throwable $e) {
+            return $this->callback_secret;
         }
     }
 

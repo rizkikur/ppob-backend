@@ -5,6 +5,7 @@ namespace App\Domain\Transaction\Models;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Models\Inquiry;
 use App\Domain\Partner\Models\Partner;
+use App\Domain\Partner\Models\WebhookDelivery;
 use App\Domain\Product\Models\Product;
 use App\Domain\Product\Models\Provider;
 use App\Domain\Shared\Casts\MoneyCast;
@@ -83,6 +84,11 @@ class Transaction extends Model
     public function originalSupplier(): BelongsTo
     {
         return $this->belongsTo(Provider::class, 'original_supplier_id');
+    }
+
+    public function webhookDeliveries(): HasMany
+    {
+        return $this->hasMany(WebhookDelivery::class);
     }
 
     public function isPending(): bool

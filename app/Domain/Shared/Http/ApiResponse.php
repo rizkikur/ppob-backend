@@ -80,6 +80,14 @@ class ApiResponse
     }
 
     /**
+     * Response diterima untuk pemrosesan async (HTTP 202).
+     */
+    public static function accepted(mixed $data = null, string $message = 'Accepted'): JsonResponse
+    {
+        return self::success($data, $message, 202);
+    }
+
+    /**
      * Response sukses tanpa body (HTTP 204).
      */
     public static function noContent(): JsonResponse

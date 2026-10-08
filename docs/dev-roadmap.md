@@ -165,8 +165,11 @@ Dependensi: Phase 6
 | 8.6 | Feature test: partner rate limit              | ✅ Selesai     | 2 test di `PartnerRateLimitTest.php` (RPM limit 429 & per-partner isolation) |
 | 8.7 | Feature test: IP whitelist                    | ✅ Selesai     | 3 test di `PartnerIpWhitelistTest.php` (blocked IP 403, allowed IP 200, wildcard) |
 | 8.8 | Feature test: partner transactions & pricing  | ✅ Selesai     | 8 test di `PartnerTransactionTest.php` (debit wallet, ADR-006 pricing, idempotency 409) |
+| 8.9 | Job & Engine: `DeliverWebhookJob` & `WebhookDelivery` | ✅ Selesai | Async partner callback dengan 5 attempt exponential backoff (ADR-007/008) |
+| 8.10| Feature test: partner webhook delivery & async mode | ✅ Selesai | 6 test di `PartnerWebhookDeliveryTest.php` (202 accepted, HMAC, retry) |
 
 ---
+
 
 ## Dependensi Antar Phase
 

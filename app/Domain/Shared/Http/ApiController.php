@@ -35,6 +35,11 @@ abstract class ApiController extends BaseController
         return ApiResponse::created($data);
     }
 
+    protected function accepted(mixed $data = null, string $message = 'Accepted'): JsonResponse
+    {
+        return ApiResponse::accepted($data, $message);
+    }
+
     protected function noContent(): JsonResponse
     {
         return ApiResponse::noContent();

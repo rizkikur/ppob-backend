@@ -10,11 +10,11 @@ class ResolvedRouteTest extends TestCase
 {
     public function test_resolved_route_encapsulates_provider_and_original_provider_correctly(): void
     {
-        $providerA = new Provider();
+        $providerA = new Provider;
         $providerA->id = 10;
         $providerA->code = 'telkomsel_a';
 
-        $providerB = new Provider();
+        $providerB = new Provider;
         $providerB->id = 20;
         $providerB->code = 'telkomsel_b';
 
@@ -35,7 +35,7 @@ class ResolvedRouteTest extends TestCase
 
     public function test_resolved_route_without_failover(): void
     {
-        $provider = new Provider();
+        $provider = new Provider;
         $provider->id = 15;
         $provider->code = 'pln';
 

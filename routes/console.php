@@ -30,3 +30,10 @@ Schedule::command('ppob:health:check')
     ->name('ppob-health-check')
     ->withoutOverlapping()
     ->runInBackground();
+
+// 4. Re-dispatch callback webhook mitra yang pending retry setiap menit (ADR-008)
+Schedule::command('ppob:webhook:retry')
+    ->everyMinute()
+    ->name('ppob-webhook-retry')
+    ->withoutOverlapping()
+    ->runInBackground();

@@ -7,7 +7,28 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ## [Unreleased]
 
+## [v0.11.0] - 2026-10-08
+### Async Partner Callback & Webhook Delivery Engine (ADR-007 & ADR-008)
+- **Added**:
+  - Model `App\Domain\Partner\Models\WebhookDelivery`: Tracking pengiriman callback ke mitra dengan status (`pending`, `delivered`, `failed`, `failed_permanent`) dan pencatatan response HTTP serta timestamp retry.
+  - Job `App\Domain\Partner\Jobs\DeliverWebhookJob`:
+    - Pengiriman HTTP POST callback ke `callback_url` mitra dengan signature HMAC-SHA256 (`X-Signature`), `X-Timestamp`, dan `X-Event-Id`.
+    - Exponential Backoff retry 5 attempt (Attempt 1: langsung, 2: +1m, 3: +5m, 4: +30m, 5: +2j) sesuai ADR-008.
+    - Penandaan `failed_permanent` dan logging alert jika attempt 5 gagal.
+  - Response mode handling di `PartnerController::createTransaction()` (ADR-007):
+    - Mode `async`: Mengembalikan respon HTTP `202 Accepted` (`status: pending`).
+    - Mode `sync`: Mengembalikan respon HTTP `201 Created`.
+  - Helper response: Menambahkan metode `accepted()` (HTTP 202) pada `ApiResponse` dan `ApiController`.
+  - Integrasi di `TransactionService`:
+    - Otomatis trigger dispatch `DeliverWebhookJob` saat transaksi mitra mencapai status terminal (`markSuccess`, `failAndRefund`).
+  - Artisan Command `ppob:webhook:retry`:
+    - Men-dispatch ulang pengiriman webhook yang tertunda/gagal saat waktu retry tercapai (`pendingRetry`).
+    - Dijadwalkan berjalan setiap menit di `routes/console.php`.
+  - Feature test `PartnerWebhookDeliveryTest`: 6 test case memverifikasi keberhasilan pengiriman callback, verifikasi header signature HMAC, exponential backoff delay, status failed_permanent setelah attempt 5, respon 202 async mode, dan artisan command retry.
+  - Total test suite bertambah menjadi 150 tests (562 assertions), 100% lulus.
+
 ## [v0.10.0] - 2026-10-08
+
 ### Multi-Supplier Failover Routing Engine (ADR-004 & ADR-005)
 - **Added**:
   - Model `App\Domain\Ppob\Models\ProductSupplierRoute`: Pemetaan multi-supplier per produk dengan urutan prioritas dan status aktif.

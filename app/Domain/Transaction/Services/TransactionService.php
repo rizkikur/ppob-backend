@@ -4,7 +4,9 @@ namespace App\Domain\Transaction\Services;
 
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Models\Inquiry;
+use App\Domain\Partner\Jobs\DeliverWebhookJob;
 use App\Domain\Partner\Models\Partner;
+use App\Domain\Partner\Models\WebhookDelivery;
 use App\Domain\Ppob\Services\SupplierRoutingService;
 use App\Domain\Product\Models\Product;
 use App\Domain\Product\Services\ProductPricingService;
@@ -238,6 +240,8 @@ class TransactionService
             'provider_response' => $response,
         ]);
 
+        $this->dispatchPartnerWebhook($transaction);
+
         return $transaction;
     }
 
@@ -283,7 +287,38 @@ class TransactionService
                 "Pengembalian dana transaksi #{$lockedTx->id}: {$reason}"
             );
 
+            $this->dispatchPartnerWebhook($lockedTx);
+
             return $lockedTx;
         });
+    }
+
+    /**
+     * Dispatch webhook callback ke partner jika transaksi milik partner dan memiliki callback_url (ADR-007 & ADR-008).
+     */
+    public function dispatchPartnerWebhook(Transaction $transaction): ?WebhookDelivery
+    {
+        if (! $transaction->partner_id) {
+            return null;
+        }
+
+        $transaction->loadMissing('partner');
+        $partner = $transaction->partner;
+
+        if (! $partner || ! $partner->callback_url) {
+            return null;
+        }
+
+        $delivery = WebhookDelivery::create([
+            'partner_id' => $partner->id,
+            'transaction_id' => $transaction->id,
+            'attempt' => 1,
+            'status' => WebhookDelivery::STATUS_PENDING,
+            'callback_url' => $partner->callback_url,
+        ]);
+
+        DeliverWebhookJob::dispatch($delivery->id);
+
+        return $delivery;
     }
 }

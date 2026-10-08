@@ -104,6 +104,11 @@ class PartnerController extends ApiController
 
         $tx->loadMissing(['product']);
 
+        // ADR-007: Response mode async vs sync
+        if ($partner->isAsync()) {
+            return $this->accepted(new PartnerTransactionResource($tx), 'Transaksi diterima dan sedang diproses');
+        }
+
         return $this->created(new PartnerTransactionResource($tx), 'Transaksi berhasil dibuat');
     }
 
