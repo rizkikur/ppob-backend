@@ -28,7 +28,7 @@ class ProcessTransactionJob implements ShouldQueue
     public function handle(PpobService $ppobService, TransactionService $transactionService): void
     {
         /** @var Transaction|null $tx */
-        $tx = $this->transaction->fresh(['product.provider', 'user']);
+        $tx = $this->transaction->fresh(['product.provider', 'user', 'supplier']);
         if (! $tx || $tx->status !== Transaction::STATUS_PENDING) {
             return;
         }
@@ -37,11 +37,13 @@ class ProcessTransactionJob implements ShouldQueue
 
         try {
             $product = $tx->product;
+            $supplier = $tx->supplier ?? $product?->provider;
             $result = $ppobService->pay(
                 $product,
                 $tx->customer_number,
                 $tx->amount_cents,
-                (string) $tx->id
+                (string) $tx->id,
+                $supplier
             );
 
             $status = $result['status'] ?? 'failed';

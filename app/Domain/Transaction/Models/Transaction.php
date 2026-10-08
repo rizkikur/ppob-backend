@@ -6,6 +6,7 @@ use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Models\Inquiry;
 use App\Domain\Partner\Models\Partner;
 use App\Domain\Product\Models\Product;
+use App\Domain\Product\Models\Provider;
 use App\Domain\Shared\Casts\MoneyCast;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -72,6 +73,16 @@ class Transaction extends Model
     public function partner(): BelongsTo
     {
         return $this->belongsTo(Partner::class);
+    }
+
+    public function supplier(): BelongsTo
+    {
+        return $this->belongsTo(Provider::class, 'supplier_id');
+    }
+
+    public function originalSupplier(): BelongsTo
+    {
+        return $this->belongsTo(Provider::class, 'original_supplier_id');
     }
 
     public function isPending(): bool

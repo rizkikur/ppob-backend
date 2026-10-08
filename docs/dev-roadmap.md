@@ -145,8 +145,11 @@ Dependensi: Phase 6
 | 7.7 | Controller: `WebhookController`               | ✅ Selesai     | Validasi HMAC signature, timestamp, event_id     |
 | 7.8 | Feature test: webhook validasi berlapis       | ✅ Selesai     | 7 test di `WebhookValidationTest.php`            |
 | 7.9 | Feature test: provider unavailable handling   | ✅ Selesai     | 4 test di `ProviderCircuitBreakerTest.php` (503) |
+| 7.10| Failover Routing: `SupplierRoutingService`    | ✅ Selesai     | Multi-supplier routing, evaluasi circuit breaker, failover policy per partner (ADR-004/005) |
+| 7.11| Feature test: supplier failover routing       | ✅ Selesai     | 8 test di `SupplierFailoverRoutingTest.php`      |
 
 ---
+
 
 ### Phase 8 — Partner / Open API Domain
 

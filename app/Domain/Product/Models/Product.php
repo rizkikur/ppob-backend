@@ -2,6 +2,7 @@
 
 namespace App\Domain\Product\Models;
 
+use App\Domain\Ppob\Models\ProductSupplierRoute;
 use App\Domain\Shared\Casts\MoneyCast;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -68,5 +69,10 @@ class Product extends Model
     public function tierPrices(): HasMany
     {
         return $this->hasMany(ProductTierPrice::class);
+    }
+
+    public function supplierRoutes(): HasMany
+    {
+        return $this->hasMany(ProductSupplierRoute::class);
     }
 }

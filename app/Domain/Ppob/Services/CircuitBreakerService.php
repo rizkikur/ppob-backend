@@ -95,6 +95,14 @@ class CircuitBreakerService
     }
 
     /**
+     * Alias untuk trip() — paksa circuit berstatus OPEN.
+     */
+    public function forceOpen(string $supplierCode): void
+    {
+        $this->trip($supplierCode);
+    }
+
+    /**
      * Reset circuit ke status CLOSED.
      */
     public function reset(string $supplierCode): void

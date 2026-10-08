@@ -60,6 +60,7 @@ class DomainServiceProvider extends ServiceProvider
 
         // ─── Inquiry & PPOB Services ──────────────────────────────────────────
         $this->app->singleton(CircuitBreakerService::class);
+        $this->app->singleton(SupplierRoutingService::class);
         $this->app->singleton(PpobService::class);
         $this->app->singleton(InquiryService::class);
         $this->app->singleton(TransactionService::class);

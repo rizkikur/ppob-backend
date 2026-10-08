@@ -60,6 +60,11 @@ class Partner extends Model
         return $this->hasMany(PartnerProductPrice::class);
     }
 
+    public function routingRules(): HasMany
+    {
+        return $this->hasMany(PartnerRoutingRule::class);
+    }
+
     public function getSecretDecrypted(): string
     {
         try {

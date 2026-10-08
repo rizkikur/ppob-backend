@@ -2,6 +2,8 @@
 
 namespace App\Domain\Product\Models;
 
+use App\Domain\Partner\Models\PartnerRoutingRule;
+use App\Domain\Ppob\Models\ProductSupplierRoute;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -49,5 +51,15 @@ class Provider extends Model
     public function products(): HasMany
     {
         return $this->hasMany(Product::class, 'provider_id');
+    }
+
+    public function supplierRoutes(): HasMany
+    {
+        return $this->hasMany(ProductSupplierRoute::class, 'provider_id');
+    }
+
+    public function preferredRoutingRules(): HasMany
+    {
+        return $this->hasMany(PartnerRoutingRule::class, 'preferred_provider_id');
     }
 }

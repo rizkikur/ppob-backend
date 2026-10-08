@@ -4,6 +4,7 @@ namespace App\Domain\Ppob\Services;
 
 use App\Domain\Ppob\Contracts\PpobProviderInterface;
 use App\Domain\Product\Models\Product;
+use App\Domain\Product\Models\Provider;
 use App\Domain\Shared\Exceptions\BusinessException;
 use App\Domain\Shared\ValueObjects\Money;
 
@@ -22,14 +23,20 @@ class PpobService
      *
      * @throws BusinessException
      */
-    public function inquiry(Product $product, string $customerNumber): array
+    public function inquiry(Product $product, string $customerNumber, ?Provider $provider = null): array
     {
-        $driver = $this->resolveDriver($product);
-        $providerCode = $product->provider?->code ?? 'default';
+        $actualProvider = $provider ?? $product->provider;
+        if (! $actualProvider) {
+            $product->loadMissing('provider');
+            $actualProvider = $product->provider;
+        }
+
+        $driver = $this->resolveDriver($product, $actualProvider);
+        $providerCode = $actualProvider?->code ?? 'default';
 
         $cb = $this->getCircuitBreaker();
         if (! $cb->isAvailable($providerCode)) {
-            throw BusinessException::providerUnavailable($product->provider?->name ?? 'Provider');
+            throw BusinessException::providerUnavailable($actualProvider?->name ?? 'Provider');
         }
 
         try {
@@ -48,14 +55,25 @@ class PpobService
      *
      * @throws BusinessException
      */
-    public function pay(Product $product, string $customerNumber, Money $amount, string $transactionRef): array
-    {
-        $driver = $this->resolveDriver($product);
-        $providerCode = $product->provider?->code ?? 'default';
+    public function pay(
+        Product $product,
+        string $customerNumber,
+        Money $amount,
+        string $transactionRef,
+        ?Provider $provider = null
+    ): array {
+        $actualProvider = $provider ?? $product->provider;
+        if (! $actualProvider) {
+            $product->loadMissing('provider');
+            $actualProvider = $product->provider;
+        }
+
+        $driver = $this->resolveDriver($product, $actualProvider);
+        $providerCode = $actualProvider?->code ?? 'default';
 
         $cb = $this->getCircuitBreaker();
         if (! $cb->isAvailable($providerCode)) {
-            throw BusinessException::providerUnavailable($product->provider?->name ?? 'Provider');
+            throw BusinessException::providerUnavailable($actualProvider?->name ?? 'Provider');
         }
 
         try {
@@ -77,9 +95,9 @@ class PpobService
     /**
      * Cek status transaksi (untuk provider async/polling).
      */
-    public function checkStatus(Product $product, string $providerRef): array
+    public function checkStatus(Product $product, string $providerRef, ?Provider $provider = null): array
     {
-        $driver = $this->resolveDriver($product);
+        $driver = $this->resolveDriver($product, $provider);
 
         return $driver->checkStatus($providerRef);
     }
@@ -95,18 +113,23 @@ class PpobService
     }
 
     /**
-     * Resolve driver berdasarkan provider.driver field produk.
+     * Resolve driver berdasarkan provider.driver field produk atau provider eksplisit.
      */
-    public function resolveDriver(Product $product): PpobProviderInterface
+    public function resolveDriver(Product $product, ?Provider $provider = null): PpobProviderInterface
     {
-        $product->loadMissing('provider');
-        $driverName = $product->provider?->driver;
-
-        if (! $driverName) {
-            throw BusinessException::providerUnavailable($product->provider?->name ?? 'Unknown');
+        $actualProvider = $provider ?? $product->provider;
+        if (! $actualProvider) {
+            $product->loadMissing('provider');
+            $actualProvider = $product->provider;
         }
 
-        return $this->resolveDriverByName($driverName, $product->provider?->name ?? 'Unknown');
+        $driverName = $actualProvider?->driver;
+
+        if (! $driverName) {
+            throw BusinessException::providerUnavailable($actualProvider?->name ?? 'Unknown');
+        }
+
+        return $this->resolveDriverByName($driverName, $actualProvider?->name ?? 'Unknown');
     }
 
     /**

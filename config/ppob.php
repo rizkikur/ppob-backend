@@ -125,4 +125,14 @@ return [
         ],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Failover Routing Configuration (ADR-004)
+    |--------------------------------------------------------------------------
+    */
+    'routing' => [
+        'default_user_allow_failover' => env('PPOB_ROUTING_DEFAULT_FAILOVER', true),
+        'default_user_failover_policy' => env('PPOB_ROUTING_DEFAULT_POLICY', 'same_category'),
+    ],
+
 ];

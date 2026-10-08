@@ -5,6 +5,7 @@ namespace App\Domain\Transaction\Services;
 use App\Domain\Auth\Models\User;
 use App\Domain\Inquiry\Models\Inquiry;
 use App\Domain\Partner\Models\Partner;
+use App\Domain\Ppob\Services\SupplierRoutingService;
 use App\Domain\Product\Models\Product;
 use App\Domain\Product\Services\ProductPricingService;
 use App\Domain\Shared\Exceptions\BusinessException;
@@ -23,14 +24,20 @@ use Illuminate\Support\Facades\DB;
  * - Untuk prepaid: amount dari klien diabaikan, harga diambil dari server
  * - Untuk postpaid: inquiry_id wajib, amount harus cocok persis dengan inquiry
  * - Debit saldo HANYA via WalletService::debit() dengan row locking
- * - Dispatch job ke queue provider per ADR-002
+ * - Dispatch job ke queue provider per ADR-002 & ADR-004
  */
 class TransactionService
 {
     public function __construct(
         private readonly WalletService $walletService,
-        private readonly ProductPricingService $pricingService
+        private readonly ProductPricingService $pricingService,
+        private readonly ?SupplierRoutingService $routingService = null
     ) {}
+
+    private function getRoutingService(): SupplierRoutingService
+    {
+        return $this->routingService ?? app(SupplierRoutingService::class);
+    }
 
     /**
      * Buat transaksi baru.
@@ -86,7 +93,10 @@ class TransactionService
             $amount = $product->base_price_cents ?? $sellPrice;
         }
 
-        return DB::transaction(function () use ($user, $product, $customerNumber, $inquiry, $amount, $sellPrice) {
+        // Resolusi supplier & failover routing (ADR-004 & ADR-005)
+        $resolvedRoute = $this->getRoutingService()->resolve($product);
+
+        return DB::transaction(function () use ($user, $product, $customerNumber, $inquiry, $amount, $sellPrice, $resolvedRoute) {
             // Debit saldo via WalletService (bukan langsung update model Wallet)
             $mutation = $this->walletService->debit(
                 $user,
@@ -107,15 +117,16 @@ class TransactionService
                 'sell_price_cents' => $sellPrice->toCents(),
                 'status' => Transaction::STATUS_PENDING,
                 'idempotency_key' => $idempotencyKey,
+                'supplier_id' => $resolvedRoute->getProviderId(),
+                'original_supplier_id' => $resolvedRoute->getOriginalProviderId(),
+                'is_failover' => $resolvedRoute->isFailover,
             ]);
 
             // Hubungkan ID transaksi ke referensi mutasi dompet
             $mutation->update(['reference_id' => $transaction->id]);
 
-            // Dispatch job async ke queue provider (ADR-002)
-            $product->loadMissing('provider');
-            $queueName = $product->provider?->queue_name ?: 'transactions';
-            ProcessTransactionJob::dispatch($transaction)->onQueue($queueName);
+            // Dispatch job async ke queue provider yang di-resolve (ADR-002 & ADR-004)
+            ProcessTransactionJob::dispatch($transaction)->onQueue($resolvedRoute->queueName);
 
             return $transaction;
         });
@@ -175,7 +186,10 @@ class TransactionService
             $amount = $product->base_price_cents ?? $sellPrice;
         }
 
-        return DB::transaction(function () use ($partner, $partnerUser, $product, $customerNumber, $inquiry, $amount, $sellPrice) {
+        // Resolusi supplier & failover routing berdasarkan aturan partner (ADR-004 & ADR-005)
+        $resolvedRoute = $this->getRoutingService()->resolve($product, $partner);
+
+        return DB::transaction(function () use ($partner, $partnerUser, $product, $customerNumber, $inquiry, $amount, $sellPrice, $resolvedRoute) {
             // Debit saldo deposit partner via WalletService
             $mutation = $this->walletService->debit(
                 $partnerUser,
@@ -197,18 +211,20 @@ class TransactionService
                 'sell_price_cents' => $sellPrice->toCents(),
                 'status' => Transaction::STATUS_PENDING,
                 'idempotency_key' => $idempotencyKey,
+                'supplier_id' => $resolvedRoute->getProviderId(),
+                'original_supplier_id' => $resolvedRoute->getOriginalProviderId(),
+                'is_failover' => $resolvedRoute->isFailover,
             ]);
 
             // Hubungkan ID transaksi ke referensi mutasi dompet
             $mutation->update(['reference_id' => $transaction->id]);
 
-            // Dispatch job async ke queue provider (ADR-002)
-            $product->loadMissing('provider');
-            $queueName = $product->provider?->queue_name ?: 'transactions';
-            ProcessTransactionJob::dispatch($transaction)->onQueue($queueName);
+            // Dispatch job async ke queue provider yang di-resolve (ADR-002 & ADR-004)
+            ProcessTransactionJob::dispatch($transaction)->onQueue($resolvedRoute->queueName);
 
             return $transaction;
         });
+
     }
 
     /**

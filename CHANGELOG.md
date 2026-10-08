@@ -7,7 +7,33 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ## [Unreleased]
 
+## [v0.10.0] - 2026-10-08
+### Multi-Supplier Failover Routing Engine (ADR-004 & ADR-005)
+- **Added**:
+  - Model `App\Domain\Ppob\Models\ProductSupplierRoute`: Pemetaan multi-supplier per produk dengan urutan prioritas dan status aktif.
+  - Model `App\Domain\Partner\Models\PartnerRoutingRule`: Aturan per-mitra untuk preferred supplier, preferensi failover (`allow_failover`), dan kebijakan failover (`none`, `same_category`, `any`).
+  - DTO `App\Domain\Ppob\DTOs\ResolvedRoute`: Encapsulation hasil resolusi rute supplier (`provider`, `originalProvider`, `isFailover`, `queueName`).
+  - Service `App\Domain\Ppob\Services\SupplierRoutingService`:
+    - Resolusi rute otomatis dengan evaluasi status aktif provider & Circuit Breaker (ADR-003).
+    - Hierarki aturan per-mitra: spesifik per-kategori -> fallback ke aturan global mitra -> fallback default aman (`allow_failover = false`).
+    - Aturan default konsumen mobile B2C via konfigurasi `ppob.routing.default_user_allow_failover`.
+    - Failover ke supplier backup kompatibel jika supplier utama berstatus OPEN/down.
+  - Relasi Eloquent:
+    - `Product::supplierRoutes()`, `Partner::routingRules()`, `Provider::supplierRoutes()`, `Provider::preferredRoutingRules()`.
+    - `Transaction::supplier()` dan `Transaction::originalSupplier()`.
+  - Integrasi di `TransactionService`:
+    - Resolusi rute dilakukan sebelum transaksi dicatat dan sebelum saldo didebit (fail-fast 503 jika provider unavailable).
+    - Pencatatan field `supplier_id`, `original_supplier_id`, dan `is_failover` pada transaksi.
+    - Dispatch job `ProcessTransactionJob` langsung ke named queue milik supplier terpilih.
+  - Integrasi di `ProcessTransactionJob`:
+    - Penerusan `$tx->supplier` ke `PpobService::pay()`.
+    - Konsistensi retry transaksi ke supplier yang sama sesuai aturan keras ADR-005.
+  - Konfigurasi `config/ppob.php`: Pengaturan default failover untuk konsumen non-mitra.
+  - Feature test `SupplierFailoverRoutingTest`: 8 test case komprehensif mencakup resolusi normal, failover otomatis, penolakan transaksi saat failover false tanpa memotong saldo, override aturan kategori, dan dispatch queue supplier.
+  - Total test suite bertambah menjadi 142 tests (528 assertions), 100% lulus.
+
 ## [v0.9.0] - 2026-10-07
+
 ### Deployment & Scheduled Maintenance Jobs
 - **Added**:
   - **Docker Production Stack**:
