@@ -713,9 +713,180 @@
             z-index: 9999;
         }
 
-        #toast.show {
-            transform: translateY(0);
+        /* Modal Interactive Tester */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+            padding: 1rem;
+        }
+
+        .modal-overlay.open {
             opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 14px;
+            max-width: 780px;
+            width: 100%;
+            max-height: 90vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+            transform: scale(0.96);
+            transition: transform 0.2s ease;
+        }
+
+        .modal-overlay.open .modal-card {
+            transform: scale(1);
+        }
+
+        .modal-header {
+            padding: 1.15rem 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--bg-surface-elevated);
+        }
+
+        .modal-header h3 {
+            font-size: 1.15rem;
+            font-weight: 700;
+            color: var(--text-heading);
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .modal-close-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0.25rem;
+            transition: color 0.15s;
+        }
+
+        .modal-close-btn:hover {
+            color: var(--text-heading);
+        }
+
+        .modal-body {
+            padding: 1.25rem 1.5rem;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .preset-badge-btn {
+            background: var(--bg-surface-elevated);
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 0.35rem 0.65rem;
+            color: var(--text-body);
+            font-size: 0.75rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+        }
+
+        .preset-badge-btn:hover {
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        .console-form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+        }
+
+        .console-form-group label {
+            font-size: 0.775rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .console-input-row {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .console-select {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--accent);
+            font-weight: 700;
+            font-family: var(--font-mono);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .console-input {
+            flex: 1;
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-heading);
+            font-family: var(--font-mono);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.85rem;
+            outline: none;
+        }
+
+        .console-input:focus, .console-select:focus, .console-textarea:focus {
+            border-color: var(--accent);
+        }
+
+        .console-textarea {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            color: var(--text-heading);
+            font-family: var(--font-mono);
+            padding: 0.5rem 0.75rem;
+            font-size: 0.825rem;
+            outline: none;
+            resize: vertical;
+            min-height: 80px;
+        }
+
+        .console-response-box {
+            background: var(--bg-code);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 1rem;
+            font-family: var(--font-mono);
+            font-size: 0.8rem;
+            color: #e5e7eb;
+            max-height: 240px;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            word-break: break-all;
         }
     </style>
 </head>
@@ -742,6 +913,12 @@
 
             <!-- Actions -->
             <div class="nav-actions">
+                <button class="btn-claude btn-claude-secondary" onclick="openTesterModal()" style="border-color: rgba(217, 119, 87, 0.4); color: var(--accent);">
+                    <span>⚡</span> API Console
+                </button>
+                <a href="/admin" class="btn-claude btn-claude-secondary" title="Buka Dashboard Web Admin">
+                    <span>💼</span> Web Admin
+                </a>
                 <a href="/docs" class="btn-claude btn-claude-secondary" title="Kembali ke tampilan Swagger Classic v1">
                     <span>🔄</span> Swagger v1
                 </a>
@@ -764,8 +941,11 @@
             <div class="nav-group">
                 <div class="nav-group-title">Getting Started</div>
                 <a href="#overview" class="nav-item-link active"><span>1. Ikhtisar &amp; Arsitektur</span></a>
+                <a href="#sandbox-data" class="nav-item-link"><span>🧪 Data Uji Sandbox</span></a>
+                <a href="#sequence-diagrams" class="nav-item-link"><span>📊 Diagram Alur Transaksi</span></a>
                 <a href="#authentication" class="nav-item-link"><span>2. Autentikasi (B2C &amp; B2B)</span></a>
                 <a href="#response-envelopes" class="nav-item-link"><span>3. Standar Envelope Respon</span></a>
+                <a href="#error-matrix" class="nav-item-link"><span>🎯 Matriks Error &amp; UI</span></a>
                 <a href="#money-standard" class="nav-item-link"><span>4. Standar Nominal Uang</span></a>
             </div>
 
@@ -864,6 +1044,205 @@
                     <li><strong>B2C Consumer (Mobile App):</strong> Autentikasi dengan token Sanctum, otorisasi transaksi dengan PIN token 2-step (Zero Exposure), dan deteksi otomatis operator dari prefix nomor seluler.</li>
                     <li><strong>B2B Open API (Mitra Bisnis):</strong> Autentikasi mesin-ke-mesin menggunakan API Key, signature HMAC-SHA256, IP Whitelist, dan respon asinkron <code>202 Accepted</code> dengan engine webhook retry otomatis.</li>
                 </ul>
+            </section>
+
+            <!-- SECTION: SANDBOX TEST DATA -->
+            <section id="sandbox-data" class="doc-section">
+                <h2>🧪 Data Pengujian Sandbox &amp; Kredensial Uji Coba</h2>
+                <p>Gunakan kredensial pengujian berikut untuk melakukan simulasi transaksi di lingkungan lokal / sandbox tanpa menggunakan dana riil:</p>
+
+                <div class="claude-callout callout-tip">
+                    <div class="claude-callout-icon">💡</div>
+                    <div>
+                        <strong class="callout-title">Database Seeder Terintegrasi</strong>
+                        Seluruh akun pengujian di bawah ini sudah tersedia secara otomatis di database melalui seeder <code>UserDemoSeeder</code> dan <code>PartnerDemoSeeder</code> dengan saldo aktif siap pakai.
+                    </div>
+                </div>
+
+                <h3>A. Akun Demo Konsumen Mobile (B2C)</h3>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Profil Akun</th>
+                            <th>Nomor HP</th>
+                            <th>OTP / PIN Default</th>
+                            <th>Tier &amp; Saldo Demo</th>
+                            <th>Aksi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>Budi Pelanggan Setia</strong></td>
+                            <td><code>081400000004</code></td>
+                            <td><code>123456</code></td>
+                            <td>End User (Rp 500.000,00)</td>
+                            <td><button class="btn-copy-code" onclick="copySnippetText('081400000004')">Salin HP</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Agen Mitra Retail</strong></td>
+                            <td><code>081200000002</code></td>
+                            <td><code>123456</code></td>
+                            <td>Agent (Rp 2.500.000,00)</td>
+                            <td><button class="btn-copy-code" onclick="copySnippetText('081200000002')">Salin HP</button></td>
+                        </tr>
+                        <tr>
+                            <td><strong>Reseller Grosir Pulsa</strong></td>
+                            <td><code>081300000003</code></td>
+                            <td><code>123456</code></td>
+                            <td>Reseller (Rp 5.000.000,00)</td>
+                            <td><button class="btn-copy-code" onclick="copySnippetText('081300000003')">Salin HP</button></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>B. Nomor Handphone Uji Prefix Operator</h3>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Operator Seluler</th>
+                            <th>Contoh Nomor Input</th>
+                            <th>Produk Terhubung</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong style="color: #ef4444;">Telkomsel</strong></td>
+                            <td><code>081234567890</code></td>
+                            <td>Pulsa 5K s/d 100K, Paket Data 15GB</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #f59e0b;">Indosat Ooredoo</strong></td>
+                            <td><code>081512345678</code></td>
+                            <td>Pulsa 10K s/d 50K, Paket Freedom Data</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #3b82f6;">XL / Axis</strong></td>
+                            <td><code>081812345678</code> / <code>083812345678</code></td>
+                            <td>Pulsa Reguler &amp; Paket Xtra Combo</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #a855f7;">Tri (3)</strong></td>
+                            <td><code>089612345678</code></td>
+                            <td>Pulsa Tri &amp; AlwaysOn Data</td>
+                        </tr>
+                        <tr>
+                            <td><strong style="color: #ec4899;">Smartfren</strong></td>
+                            <td><code>088112345678</code></td>
+                            <td>Pulsa Smartfren &amp; Paket Kuota Nonstop</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>C. Nomor Pelanggan Uji Pascabayar (Postpaid / Tagihan)</h3>
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Layanan Tagihan</th>
+                            <th>ID Pelanggan Demo</th>
+                            <th>Nominal Tagihan</th>
+                            <th>Admin Fee</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>PLN Pascabayar</strong></td>
+                            <td><code>512345678901</code></td>
+                            <td>Rp 250.000,00</td>
+                            <td>Rp 2.500,00</td>
+                        </tr>
+                        <tr>
+                            <td><strong>BPJS Kesehatan</strong></td>
+                            <td><code>8888812345678901</code></td>
+                            <td>Rp 70.000,00</td>
+                            <td>Rp 2.500,00</td>
+                        </tr>
+                        <tr>
+                            <td><strong>PDAM Tirta</strong></td>
+                            <td><code>1002345678</code></td>
+                            <td>Rp 85.000,00</td>
+                            <td>Rp 2.500,00</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <h3>D. Kredensial Pengujian Mitra B2B (Open API)</h3>
+                <div class="code-block">
+                    <div class="code-nav">
+                        <span style="font-size: 0.75rem; color: var(--text-muted); padding-left: 0.5rem;">Partner B2B Demo (PT Mitra Finansial Solusindo)</span>
+                        <button class="btn-copy-code" onclick="copySnippetText('partner_live_demo123')">Salin API Key</button>
+                    </div>
+                    <pre class="code-content">X-Api-Key:      partner_live_demo123
+API Secret:     partner_secret_demo456
+Allowed IPs:    Semua IP (Wildcard Mode)
+Saldo Deposit:  Rp 15.000.000,00
+Custom Price:   TSEL20K = Rp 20.200 | PLN50 = Rp 50.200</pre>
+                </div>
+            </section>
+
+            <!-- SECTION: SEQUENCE DIAGRAMS -->
+            <section id="sequence-diagrams" class="doc-section">
+                <h2>📊 Diagram Alur Transaksi (Visual Sequence)</h2>
+                <p>Memahami perjalanan request dari aplikasi pengguna hingga konfirmasi terminal di server backend:</p>
+
+                <h3>1. Alur Transaksi Prabayar (Prepaid Flow — Pulsa / Paket Data)</h3>
+                <div class="endpoint-card">
+                    <div class="endpoint-body">
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.825rem;">
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid var(--accent);">
+                                <strong>Step 1 (Input Nomor):</strong> Mobile App mengetik nomor &rarr; <code>GET /products/operator-prefix?phone=...</code> &rarr; Deteksi Operator &amp; Ambil Harga Tier
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                                <strong>Step 2 (PIN Challenge):</strong> Mobile App memanggil <code>POST /security/pin/challenge</code> &rarr; Backend merespon <code>challenge_id</code>
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                <strong>Step 3 (Verifikasi PIN):</strong> Kirim PIN 6-digit ke <code>POST /security/pin/verify</code> &rarr; Mendapatkan <code>pin_verification_token</code> (Zero Exposure)
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #10b981;">
+                                <strong>Step 4 (Eksekusi Transaksi):</strong> <code>POST /transactions</code> dengan header <code>X-Pin-Token</code> &amp; <code>Idempotency-Key</code> &rarr; Saldo didebit atomik &rarr; Dispatch Job ke Provider Antrean
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid var(--accent);">
+                                <strong>Step 5 (Failover Otomatis):</strong> Jika provider 1 timeout/gangguan &rarr; Circuit Breaker mengalihkan otomatis ke Provider Cadangan &rarr; Pulsa masuk ke HP pelanggan
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>2. Alur Transaksi Pascabayar (Postpaid Flow — Tagihan PLN / BPJS)</h3>
+                <div class="endpoint-card">
+                    <div class="endpoint-body">
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.825rem;">
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                                <strong>Step 1 (Inquiry Tagihan):</strong> <code>POST /inquiry</code> (sku_code: PLN-POSTPAID, customer_number: 512345678901) &rarr; Sistem menanyakan ke biller &rarr; Hasil inquiry di-cache selama 10 menit
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #f59e0b;">
+                                <strong>Step 2 (Review Rincian):</strong> Mobile App menampilkan rincian: Nama Pelanggan, Periode, Jumlah Tagihan (Cents), dan Admin Fee
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #10b981;">
+                                <strong>Step 3 (Otorisasi &amp; Bayar):</strong> Verifikasi PIN &rarr; <code>POST /transactions</code> (product_type: postpaid, inquiry_id) &rarr; Tagihan dilunasi seketika
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3>3. Alur B2B Async Webhook &amp; Exponential Retry Engine</h3>
+                <div class="endpoint-card">
+                    <div class="endpoint-body">
+                        <div style="display: flex; flex-direction: column; gap: 0.75rem; font-family: var(--font-mono); font-size: 0.825rem;">
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #3b82f6;">
+                                <strong>Step 1 (Order Masuk):</strong> Mitra memanggil <code>POST /partner/transactions</code> (HMAC Signed) &rarr; Backend merespon <code>202 Accepted</code> (status: pending)
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #10b981;">
+                                <strong>Step 2 (Terminal Status):</strong> Transaksi diproses di antrean provider hingga berstatus <code>success</code> atau <code>failed</code>
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid var(--accent);">
+                                <strong>Step 3 (Webhook Callback):</strong> <code>DeliverWebhookJob</code> mengirim HTTP POST ke <code>callback_url</code> mitra dengan header <code>X-Signature</code>
+                            </div>
+                            <div style="background: var(--bg-surface-elevated); padding: 0.75rem 1rem; border-radius: 8px; border-left: 4px solid #ef4444;">
+                                <strong>Step 4 (Retry Engine):</strong> Jika server mitra down (5xx/timeout): Sistem otomatis retry pada Attempt 2 (+1m), Attempt 3 (+5m), Attempt 4 (+30m), dan Attempt 5 (+2j)
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             <!-- SECTION 2: AUTHENTICATION -->
@@ -985,6 +1364,93 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
 }</pre>
                     </div>
                 </div>
+            </section>
+
+            <!-- SECTION: ERROR HANDLING MATRIX -->
+            <section id="error-matrix" class="doc-section">
+                <h2>🎯 Matriks Error Handling &amp; Panduan Mobile UI</h2>
+                <p>Panduan terstandarisasi untuk tim pengembang Mobile App (Flutter / React Native / Kotlin / Swift) dalam merespon error code dari backend:</p>
+
+                <div class="claude-callout callout-note">
+                    <div class="claude-callout-icon">💡</div>
+                    <div>
+                        <strong class="callout-title">Desain UI Ramah Pengguna</strong>
+                        Gunakan string <code>error_code</code> sebagai kunci percabangan logika UI, bukan teks pada <code>message</code>, agar aplikasi siap mendukung lokalisasi multi-bahasa.
+                    </div>
+                </div>
+
+                <table class="params-table">
+                    <thead>
+                        <tr>
+                            <th>Error Code API</th>
+                            <th>HTTP Status</th>
+                            <th>Pemicu &amp; Kondisi</th>
+                            <th>Rekomendasi Tindakan UI Mobile</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><code>UNAUTHENTICATED</code></td>
+                            <td><span style="color: #ef4444; font-weight: 700;">401</span></td>
+                            <td>Sesi login kedaluwarsa atau token Bearer Sanctum tidak valid/revoked.</td>
+                            <td>Hapus token lokal, alihkan pengguna ke layar Login/OTP dengan notifikasi toast <em>"Sesi berakhir, silakan masuk kembali"</em>.</td>
+                        </tr>
+                        <tr>
+                            <td><code>INSUFFICIENT_BALANCE</code></td>
+                            <td><span style="color: #f59e0b; font-weight: 700;">422</span></td>
+                            <td>Saldo dompet pengguna atau deposit mitra kurang dari total tagihan + admin.</td>
+                            <td>Munculkan BottomSheet <em>"Saldo Tidak Cukup"</em> lengkap dengan info sisa saldo dan tombol CTA <strong>"Top Up Sekarang"</strong>.</td>
+                        </tr>
+                        <tr>
+                            <td><code>INVALID_PIN</code></td>
+                            <td><span style="color: #f59e0b; font-weight: 700;">422</span></td>
+                            <td>PIN 6-digit salah dimasukkan pada saat verifikasi challenge.</td>
+                            <td>Kosongkan kotak PIN, trigger haptic feedback getar, dan tampilkan indikator sisa percobaan (maks 3x sebelum terkunci).</td>
+                        </tr>
+                        <tr>
+                            <td><code>PIN_BLOCKED</code></td>
+                            <td><span style="color: #ef4444; font-weight: 700;">423</span></td>
+                            <td>Akun diblokir sementara karena salah memasukkan PIN 3 kali berturut-turut.</td>
+                            <td>Kunci form PIN, tampilkan modal <em>"Akun Diamankan Sementara"</em> dengan tombol bantuan alur Reset PIN via WhatsApp OTP.</td>
+                        </tr>
+                        <tr>
+                            <td><code>PRODUCT_INACTIVE</code><br><code>OUT_OF_STOCK</code></td>
+                            <td><span style="color: #f59e0b; font-weight: 700;">422</span></td>
+                            <td>Produk sedang mengalami pemeliharaan operator (cut-off) atau kehabisan stok.</td>
+                            <td>Beri label badge <em>"Gangguan"</em> abu-abu pada kartu produk, disable tombol checkout, dan rekomendasikan nominal terdekat.</td>
+                        </tr>
+                        <tr>
+                            <td><code>BILL_ALREADY_PAID</code></td>
+                            <td><span style="color: #3b82f6; font-weight: 700;">422</span></td>
+                            <td>Tagihan pascabayar (PLN/BPJS/PDAM) sudah lunas dibayar di tempat/kanal lain.</td>
+                            <td>Tampilkan dialog informasi <em>"Tagihan Sudah Lunas"</em> agar pelanggan tidak panik terjadi penagihan berulang.</td>
+                        </tr>
+                        <tr>
+                            <td><code>INVALID_CUSTOMER_NUMBER</code></td>
+                            <td><span style="color: #f59e0b; font-weight: 700;">422</span></td>
+                            <td>ID pelanggan atau nomor meter tidak ditemukan di biller resmi.</td>
+                            <td>Sorot kotak input dengan border merah dan tampilkan hint <em>"Periksa kembali nomor meter/pelanggan Anda"</em>.</td>
+                        </tr>
+                        <tr>
+                            <td><code>RATE_LIMIT_EXCEEDED</code></td>
+                            <td><span style="color: #ef4444; font-weight: 700;">429</span></td>
+                            <td>Permintaan melebihi kuota proteksi anti-spam (brute-force throttle).</td>
+                            <td>Tampilkan banner countdown waktu mundur (cth: <em>"Coba lagi dalam 60 detik"</em>) dan nonaktifkan tombol submit.</td>
+                        </tr>
+                        <tr>
+                            <td><code>TRANSACTION_PENDING</code></td>
+                            <td><span style="color: #10b981; font-weight: 700;">202</span></td>
+                            <td>Transaksi sedang dalam proses antrean di gateway provider switching.</td>
+                            <td>Buka halaman <strong>Status Transaksi (Menunggu)</strong>, pasang polling status berkala (tiap 5 detik maks 1 menit) atau tunggu push notifikasi FCM.</td>
+                        </tr>
+                        <tr>
+                            <td><code>PROVIDER_TIMEOUT</code></td>
+                            <td><span style="color: #6366f1; font-weight: 700;">504</span></td>
+                            <td>Provider hulu belum memberikan respon akhir dalam batas SLA transaksi.</td>
+                            <td>Jamin bahwa saldo tidak terpotong ganda, berikan status <em>"Diproses Latar Belakang"</em> dan tawarkan riwayat mutasi.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </section>
 
             <!-- SECTION 4: MONEY STANDARD -->
@@ -1307,19 +1773,25 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
             <div class="toc-title">Di Halaman Ini</div>
             <ul class="toc-list">
                 <li><a href="#overview" class="toc-link active">1. Ikhtisar &amp; Arsitektur</a></li>
+                <li><a href="#sandbox-data" class="toc-link">🧪 Data Uji Sandbox</a></li>
+                <li><a href="#sequence-diagrams" class="toc-link">📊 Diagram Alur Transaksi</a></li>
                 <li><a href="#authentication" class="toc-link">2. Autentikasi (B2C &amp; B2B)</a></li>
                 <li><a href="#response-envelopes" class="toc-link">3. Standar Envelope Respon</a></li>
+                <li><a href="#error-matrix" class="toc-link">🎯 Matriks Error &amp; UI</a></li>
                 <li><a href="#money-standard" class="toc-link">4. Standar Nominal Uang</a></li>
-                <li><a href="#security-pin" class="toc-link">5. Keamanan PIN 2-Step</a></li>
-                <li><a href="#multi-supplier" class="toc-link">6. Multi-Supplier Failover</a></li>
-                <li><a href="#webhooks" class="toc-link">7. Async Webhook Delivery</a></li>
-                <li><a href="#ep-home" class="toc-link">8. Mobile App APIs</a></li>
-                <li><a href="#partner-apis" class="toc-link">9. Partner Open API</a></li>
-                <li><a href="#export-section" class="toc-link">10. Unduhan Tooling &amp; SDK</a></li>
+                <li><a href="#security-pin" class="toc-link">Keamanan PIN 2-Step</a></li>
+                <li><a href="#multi-supplier" class="toc-link">Multi-Supplier Failover</a></li>
+                <li><a href="#webhooks" class="toc-link">Async Webhook Delivery</a></li>
+                <li><a href="#ep-home" class="toc-link">Mobile App APIs</a></li>
+                <li><a href="#ep-partner-balance" class="toc-link">Partner Open API</a></li>
+                <li><a href="#export-section" class="toc-link">Pusat Unduhan Tooling</a></li>
             </ul>
 
             <div class="toc-tools-box">
                 <div class="toc-title">Aksi Cepat</div>
+                <button class="tool-link-btn" onclick="openTesterModal()" style="width: 100%; border-color: rgba(217, 119, 87, 0.4); color: var(--accent); cursor: pointer;">
+                    <span>⚡</span> Buka API Console
+                </button>
                 <a href="{{ $yamlDownloadUrl }}" class="tool-link-btn" download>
                     <span>📄</span> Unduh File .yaml
                 </a>
@@ -1332,6 +1804,77 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
             </div>
         </aside>
 
+    </div>
+
+    <!-- Interactive API Console Modal -->
+    <div id="modal-tester" class="modal-overlay" onclick="if(event.target === this) closeTesterModal()">
+        <div class="modal-card">
+            <div class="modal-header">
+                <h3><span>⚡</span> Interactive API Console &amp; Tester</h3>
+                <button class="modal-close-btn" onclick="closeTesterModal()" title="Tutup Modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <!-- Preset Buttons -->
+                <div>
+                    <label style="font-size: 0.75rem; color: var(--text-muted); font-weight: 600; text-transform: uppercase; margin-bottom: 0.35rem; display: block;">Quick Presets &amp; Akun Demo</label>
+                    <div style="display: flex; flex-wrap: wrap; gap: 0.5rem;">
+                        <button class="preset-badge-btn" onclick="loginDemoBudi()" style="border-color: rgba(16, 185, 129, 0.4); color: #34d399;">
+                            🔑 1-Click Login Budi (081400000004)
+                        </button>
+                        <button class="preset-badge-btn" onclick="applyPreset('home')">
+                            GET /api/v1/home
+                        </button>
+                        <button class="preset-badge-btn" onclick="applyPreset('prefix')">
+                            GET /api/v1/products/operator-prefix
+                        </button>
+                        <button class="preset-badge-btn" onclick="applyPreset('channels')">
+                            GET /api/v1/wallet/payment-channels
+                        </button>
+                        <button class="preset-badge-btn" onclick="applyPreset('partner_balance')">
+                            GET /api/partner/balance (B2B)
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Request Form -->
+                <div class="console-form-group">
+                    <label>HTTP Method &amp; Endpoint URL</label>
+                    <div class="console-input-row">
+                        <select id="console-method" class="console-select" onchange="toggleBodyInput()">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                        </select>
+                        <input type="text" id="console-url" class="console-input" value="/api/v1/home" placeholder="/api/v1/...">
+                    </div>
+                </div>
+
+                <div class="console-form-group">
+                    <label>Bearer Token / API Key Header (Otomatis Terisi setelah Login)</label>
+                    <input type="text" id="console-auth" class="console-input" placeholder="Bearer 1|... atau partner_live_demo123">
+                </div>
+
+                <div class="console-form-group" id="console-body-wrap" style="display: none;">
+                    <label>Request Body (JSON)</label>
+                    <textarea id="console-body" class="console-textarea" placeholder='{"phone": "081400000004"}'></textarea>
+                </div>
+
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 0.25rem;">
+                    <span id="console-status-badge" style="font-size: 0.8rem; font-family: var(--font-mono); color: var(--text-muted);">
+                        Status: Siap diuji
+                    </span>
+                    <button class="btn-claude btn-claude-primary" onclick="sendTestRequest()" id="btn-send-request">
+                        <span>🚀</span> Kirim Request
+                    </button>
+                </div>
+
+                <!-- Response Viewer -->
+                <div class="console-form-group">
+                    <label>HTTP Response</label>
+                    <pre id="console-response" class="console-response-box">// Hasil respon API akan ditampilkan di sini...</pre>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Toast Notification -->
@@ -1482,6 +2025,140 @@ signature = hmac.new(api_secret.encode(), payload.encode(), hashlib.sha256).hexd
                 document.getElementById('claude-search').focus();
             }
         });
+
+        // Interactive API Tester Console
+        function openTesterModal() {
+            document.getElementById('modal-tester').classList.add('open');
+        }
+
+        function closeTesterModal() {
+            document.getElementById('modal-tester').classList.remove('open');
+        }
+
+        function toggleBodyInput() {
+            const method = document.getElementById('console-method').value;
+            const bodyWrap = document.getElementById('console-body-wrap');
+            bodyWrap.style.display = (method === 'POST' || method === 'PUT') ? 'flex' : 'none';
+        }
+
+        function applyPreset(type) {
+            const methodSelect = document.getElementById('console-method');
+            const urlInput = document.getElementById('console-url');
+            const bodyInput = document.getElementById('console-body');
+
+            if (type === 'home') {
+                methodSelect.value = 'GET';
+                urlInput.value = '/api/v1/home';
+            } else if (type === 'prefix') {
+                methodSelect.value = 'GET';
+                urlInput.value = '/api/v1/products/operator-prefix?phone=081234567890';
+            } else if (type === 'channels') {
+                methodSelect.value = 'GET';
+                urlInput.value = '/api/v1/wallet/payment-channels';
+            } else if (type === 'partner_balance') {
+                methodSelect.value = 'GET';
+                urlInput.value = '/api/partner/balance';
+            }
+            toggleBodyInput();
+        }
+
+        async function loginDemoBudi() {
+            const statusBadge = document.getElementById('console-status-badge');
+            const responseBox = document.getElementById('console-response');
+            const authInput = document.getElementById('console-auth');
+
+            statusBadge.innerText = 'Mengirim OTP untuk Budi (081400000004)...';
+            try {
+                // Step 1: Send OTP
+                const resOtp = await fetch('/api/v1/auth/otp/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ phone: '081400000004' })
+                });
+                const otpJson = await resOtp.json();
+
+                // Step 2: Verify OTP (default seed OTP is 123456)
+                statusBadge.innerText = 'Memverifikasi OTP 123456...';
+                const resVerify = await fetch('/api/v1/auth/otp/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+                    body: JSON.stringify({ phone: '081400000004', otp: '123456' })
+                });
+                const verifyJson = await resVerify.json();
+
+                if (verifyJson.success && verifyJson.data && verifyJson.data.token) {
+                    authInput.value = 'Bearer ' + verifyJson.data.token;
+                    statusBadge.innerHTML = '<span style="color: #10b981; font-weight: 700;">✓ Login Berhasil (Token Aktif)</span>';
+                    responseBox.innerText = JSON.stringify(verifyJson, null, 2);
+                    showToast('Berhasil login sebagai Budi! Token siap digunakan.');
+                } else {
+                    statusBadge.innerHTML = '<span style="color: #ef4444; font-weight: 700;">Login Gagal</span>';
+                    responseBox.innerText = JSON.stringify(verifyJson, null, 2);
+                }
+            } catch (err) {
+                statusBadge.innerHTML = '<span style="color: #ef4444; font-weight: 700;">Gagal menghubungi server</span>';
+                responseBox.innerText = String(err);
+            }
+        }
+
+        async function sendTestRequest() {
+            const method = document.getElementById('console-method').value;
+            const url = document.getElementById('console-url').value.trim();
+            const auth = document.getElementById('console-auth').value.trim();
+            const bodyStr = document.getElementById('console-body').value.trim();
+            const statusBadge = document.getElementById('console-status-badge');
+            const responseBox = document.getElementById('console-response');
+            const sendBtn = document.getElementById('btn-send-request');
+
+            sendBtn.disabled = true;
+            statusBadge.innerText = 'Mengirim request...';
+            const startTime = performance.now();
+
+            const headers = {
+                'Accept': 'application/json'
+            };
+            if (auth) {
+                if (auth.startsWith('Bearer ')) {
+                    headers['Authorization'] = auth;
+                } else {
+                    headers['X-Api-Key'] = auth;
+                }
+            }
+
+            const fetchOptions = {
+                method: method,
+                headers: headers
+            };
+
+            if ((method === 'POST' || method === 'PUT') && bodyStr) {
+                headers['Content-Type'] = 'application/json';
+                fetchOptions.body = bodyStr;
+            }
+
+            try {
+                const res = await fetch(url, fetchOptions);
+                const duration = Math.round(performance.now() - startTime);
+                const contentType = res.headers.get('content-type') || '';
+                
+                let responseData;
+                if (contentType.includes('application/json')) {
+                    responseData = await res.json();
+                    responseBox.innerText = JSON.stringify(responseData, null, 2);
+                } else {
+                    responseData = await res.text();
+                    responseBox.innerText = responseData;
+                }
+
+                const statusColor = res.ok ? '#10b981' : (res.status >= 500 ? '#ef4444' : '#f59e0b');
+                statusBadge.innerHTML = `<span style="color: ${statusColor}; font-weight: 700;">HTTP ${res.status} ${res.statusText}</span> (${duration}ms)`;
+            } catch (err) {
+                const duration = Math.round(performance.now() - startTime);
+                statusBadge.innerHTML = `<span style="color: #ef4444; font-weight: 700;">Error: Network/CORS</span> (${duration}ms)`;
+                responseBox.innerText = String(err);
+            } finally {
+                sendBtn.disabled = false;
+            }
+        }
     </script>
 </body>
 </html>
