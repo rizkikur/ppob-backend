@@ -60,6 +60,10 @@
             --accent-border: rgba(193, 95, 60, 0.22);
         }
 
+        html {
+            scroll-behavior: smooth;
+        }
+
         * {
             box-sizing: border-box;
             margin: 0;
@@ -482,6 +486,7 @@
             margin: 1.5rem 0;
             overflow: hidden;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.15);
+            scroll-margin-top: 5rem;
         }
 
         .endpoint-header {
@@ -1015,9 +1020,94 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
                 </table>
             </section>
 
-            <!-- SECTION 5: MOBILE CONVENIENCE APIS -->
+            <!-- SECTION: CORE SECURITY & ENGINE -->
+            <section id="security-pin" class="doc-section">
+                <h2>Keamanan PIN 2-Step (Zero Exposure Flow)</h2>
+                <p>Untuk melindungi akun pengguna dari penyadapan atau *man-in-the-middle attack*, aplikasi mobile <strong>tidak pernah mengirimkan PIN 6-digit secara mentah</strong> pada saat eksekusi pembelian transaksi.</p>
+
+                <div class="claude-callout callout-tip">
+                    <div class="claude-callout-icon">🔐</div>
+                    <div>
+                        <strong class="callout-title">Prinsip Zero Exposure</strong>
+                        PIN diverifikasi di endpoint khusus untuk menukar challenge ID menjadi <code>pin_verification_token</code> (valid 5 menit). Saat eksekusi pembelian produk di <code>POST /transactions</code>, aplikasi hanya mengirimkan header <code>X-Pin-Token: {token}</code> yang langsung dikonsumsi sekali pakai.
+                    </div>
+                </div>
+
+                <div class="endpoint-card">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-post">POST</span>
+                            <span>/api/v1/security/pin/challenge</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">Step 1: Minta Challenge</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem;">Mendapatkan <code>challenge_id</code> unik untuk memulai verifikasi PIN pengguna.</p>
+                    </div>
+                </div>
+
+                <div class="endpoint-card">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-post">POST</span>
+                            <span>/api/v1/security/pin/verify</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">Step 2: Verifikasi &amp; Dapatkan Token</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem;">Mengirimkan <code>challenge_id</code> dan <code>pin</code> 6-digit. Jika valid, sistem mengembalikan <code>pin_verification_token</code>. Dilengkapi proteksi brute force (lockout 15 menit setelah 5x salah berturut-turut).</p>
+                    </div>
+                </div>
+            </section>
+
+            <section id="multi-supplier" class="doc-section">
+                <h2>Multi-Supplier Failover &amp; Circuit Breaker (ADR-004 &amp; ADR-005)</h2>
+                <p>Engine PPOB dilengkapi sistem perutean multi-supplier otomatis (Digiflazz, VIP Payment, dll) untuk menjamin tingkat keberhasilan transaksi maksimal:</p>
+                
+                <div class="claude-callout callout-note">
+                    <div class="claude-callout-icon">⚡</div>
+                    <div>
+                        <strong class="callout-title">Circuit Breaker Otomatis</strong>
+                        Jika supplier utama mengalami lonjakan error di atas threshold, Circuit Breaker otomatis membuka (trip) dan mengalihkan antrean transaksi ke supplier cadangan tanpa downtime.
+                    </div>
+                </div>
+
+                <ul style="margin-left: 1.5rem; margin-bottom: 1.25rem;">
+                    <li><strong>Hirarki Routing:</strong> Aturan spesifik kategori &rarr; fallback ke aturan umum mitra &rarr; fallback default aman.</li>
+                    <li><strong>Preferensi Mitra B2B:</strong> Mitra dapat mengaktifkan <code>allow_failover: true</code> dan memilih kebijakan <code>failover_policy</code> (none / same_category / any).</li>
+                </ul>
+            </section>
+
+            <section id="webhooks" class="doc-section">
+                <h2>Async Webhook Delivery Engine (ADR-007 &amp; ADR-008)</h2>
+                <p>Untuk transaksi B2B yang diproses secara asinkron (respon awal <code>202 Accepted</code>), sistem mengirimkan callback HTTP POST ke <code>callback_url</code> mitra ketika transaksi mencapai status terminal (sukses/gagal).</p>
+
+                <div class="claude-callout callout-warning">
+                    <div class="claude-callout-icon">🛡️</div>
+                    <div>
+                        <strong class="callout-title">Keamanan Header Webhook</strong>
+                        Setiap payload webhook ditandatangani menggunakan API Secret mitra: header <code>X-Signature</code> (HMAC-SHA256), <code>X-Timestamp</code>, dan <code>X-Event-Id</code> unik.
+                    </div>
+                </div>
+
+                <p><strong>Jadwal Percobaan Ulang Otomatis (Exponential Backoff):</strong></p>
+                <table class="params-table">
+                    <thead>
+                        <tr><th>Percobaan (Attempt)</th><th>Penundaan (Delay)</th><th>Status &amp; Penanganan</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Attempt 1</td><td>0 Detik (Seketika)</td><td>Kirim segera saat status transaksi terminal.</td></tr>
+                        <tr><td>Attempt 2</td><td>+1 Menit</td><td>Percobaan ulang pertama jika server mitra timeout/error.</td></tr>
+                        <tr><td>Attempt 3</td><td>+5 Menit</td><td>Percobaan ulang kedua.</td></tr>
+                        <tr><td>Attempt 4</td><td>+30 Menit</td><td>Percobaan ulang ketiga.</td></tr>
+                        <tr><td>Attempt 5</td><td>+2 Jam</td><td>Percobaan final. Jika gagal, ditandai <code>failed_permanent</code> &amp; memicu alert devops.</td></tr>
+                    </tbody>
+                </table>
+            </section>
+
+            <!-- SECTION: MOBILE CONVENIENCE APIS -->
             <section id="ep-home" class="doc-section">
-                <h2>Mobile App APIs: Home &amp; Deteksi Operator</h2>
+                <h2>Mobile App APIs (B2C)</h2>
 
                 <!-- Endpoint: GET /home -->
                 <div class="endpoint-card">
@@ -1071,6 +1161,20 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
                     </div>
                 </div>
 
+                <!-- Endpoint: GET /products -->
+                <div id="ep-products" class="endpoint-card" style="margin-top: 2rem;">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-get">GET</span>
+                            <span>/api/v1/products</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">Bearer Auth</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Katalog lengkap produk PPOB dengan filter kategori (<code>category=pulsa</code>) atau provider (<code>provider=telkomsel</code>), lengkap dengan kalkulasi harga tier pengguna yang login.</p>
+                    </div>
+                </div>
+
                 <!-- Endpoint: GET /wallet/channels -->
                 <div id="ep-wallet-channels" class="endpoint-card" style="margin-top: 2rem;">
                     <div class="endpoint-header">
@@ -1082,6 +1186,83 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
                     </div>
                     <div class="endpoint-body">
                         <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Menampilkan daftar kanal topup saldo yang tersedia: Virtual Account (BCA, Mandiri, BRI, BNI), QRIS &amp; E-Wallet, dan Transfer Bank Manual beserta biaya admin dan batas minimum/maksimum.</p>
+                    </div>
+                </div>
+
+                <!-- Endpoint: GET /wallet/mutations -->
+                <div id="ep-wallet-mutations" class="endpoint-card" style="margin-top: 2rem;">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-get">GET</span>
+                            <span>/api/v1/wallet/mutations</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">Bearer Auth</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Riwayat mutasi saldo dompet pengguna (kredit topup &amp; debit pembelian produk) dengan paginasi dan filter jenis mutasi.</p>
+                    </div>
+                </div>
+
+                <!-- Endpoint: PUT /auth/profile -->
+                <div id="ep-auth-profile" class="endpoint-card" style="margin-top: 2rem;">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-put">PUT</span>
+                            <span>/api/v1/auth/profile</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">Bearer Auth</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Memperbarui profil pengguna (nama dan/atau alamat email) yang sedang login.</p>
+                    </div>
+                </div>
+
+                <!-- Endpoint: POST /auth/fcm-token -->
+                <div id="ep-auth-fcm" class="endpoint-card" style="margin-top: 2rem;">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-post">POST</span>
+                            <span>/api/v1/auth/fcm-token</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">Bearer Auth</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Mendaftarkan atau memperbarui token Firebase Cloud Messaging (FCM) perangkat untuk push notification.</p>
+                    </div>
+                </div>
+
+            </section>
+
+            <!-- SECTION: PARTNER OPEN API -->
+            <section id="partner-apis" class="doc-section">
+                <h2>Partner Open API (B2B)</h2>
+                <p>Endpoint khusus untuk mitra bisnis B2B dengan autentikasi API Key, HMAC-SHA256 signature, dan IP Whitelist.</p>
+
+                <!-- Endpoint: GET /partner/balance -->
+                <div id="ep-partner-balance" class="endpoint-card">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-get">GET</span>
+                            <span>/api/partner/balance</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">HMAC Auth</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Pengecekan sisa saldo deposit mitra bisnis dalam satuan sen (cents) beserta saldo tampilan format Rupiah.</p>
+                    </div>
+                </div>
+
+                <!-- Endpoint: POST /partner/transactions -->
+                <div id="ep-partner-tx" class="endpoint-card" style="margin-top: 2rem;">
+                    <div class="endpoint-header">
+                        <div class="endpoint-path-wrap">
+                            <span class="method-badge method-post">POST</span>
+                            <span>/api/partner/transactions</span>
+                        </div>
+                        <span style="font-size: 0.775rem; color: var(--text-dim);">HMAC Auth</span>
+                    </div>
+                    <div class="endpoint-body">
+                        <p style="font-size: 0.875rem; margin-bottom: 0.75rem;">Pembuatan transaksi pembelian produk PPOB oleh mitra. Mendukung mode <code>sync</code> (respon 201 Created) dan mode <code>async</code> (respon 202 Accepted dengan webhook callback).</p>
                     </div>
                 </div>
 
@@ -1129,10 +1310,12 @@ $signature = hash_hmac('sha256', $payload, $apiSecret);</pre>
                 <li><a href="#authentication" class="toc-link">2. Autentikasi (B2C &amp; B2B)</a></li>
                 <li><a href="#response-envelopes" class="toc-link">3. Standar Envelope Respon</a></li>
                 <li><a href="#money-standard" class="toc-link">4. Standar Nominal Uang</a></li>
-                <li><a href="#ep-home" class="toc-link">5. Home Dashboard Mobile</a></li>
-                <li><a href="#ep-operator-prefix" class="toc-link">6. Deteksi Operator Prefix</a></li>
-                <li><a href="#ep-wallet-channels" class="toc-link">7. Topup Payment Channels</a></li>
-                <li><a href="#export-section" class="toc-link">8. Unduhan Tooling &amp; SDK</a></li>
+                <li><a href="#security-pin" class="toc-link">5. Keamanan PIN 2-Step</a></li>
+                <li><a href="#multi-supplier" class="toc-link">6. Multi-Supplier Failover</a></li>
+                <li><a href="#webhooks" class="toc-link">7. Async Webhook Delivery</a></li>
+                <li><a href="#ep-home" class="toc-link">8. Mobile App APIs</a></li>
+                <li><a href="#partner-apis" class="toc-link">9. Partner Open API</a></li>
+                <li><a href="#export-section" class="toc-link">10. Unduhan Tooling &amp; SDK</a></li>
             </ul>
 
             <div class="toc-tools-box">
@@ -1271,23 +1454,25 @@ signature = hmac.new(api_secret.encode(), payload.encode(), hashlib.sha256).hexd
             });
         }
 
-        // Scrollspy for TOC
+        // Scrollspy for TOC and Sidebar
         window.addEventListener('scroll', () => {
-            const sections = document.querySelectorAll('section.doc-section');
+            const targets = document.querySelectorAll('section.doc-section, .endpoint-card[id]');
             let current = '';
-            sections.forEach(sec => {
-                const top = sec.offsetTop - 120;
+            targets.forEach(el => {
+                const top = el.offsetTop - 140;
                 if (window.pageYOffset >= top) {
-                    current = sec.getAttribute('id');
+                    current = el.getAttribute('id');
                 }
             });
 
-            document.querySelectorAll('.toc-link').forEach(a => {
-                a.classList.remove('active');
-                if (a.getAttribute('href') === '#' + current) {
-                    a.classList.add('active');
-                }
-            });
+            if (current) {
+                document.querySelectorAll('.toc-link').forEach(a => {
+                    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+                });
+                document.querySelectorAll('#sidebar-nav .nav-item-link').forEach(a => {
+                    a.classList.toggle('active', a.getAttribute('href') === '#' + current);
+                });
+            }
         });
 
         // Shortcut ⌘K / Ctrl+K
