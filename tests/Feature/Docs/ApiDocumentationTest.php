@@ -25,6 +25,17 @@ class ApiDocumentationTest extends TestCase
         $response->assertSee('swagger-ui-bundle.js', false);
     }
 
+    public function test_v2_docs_portal_loads_successfully(): void
+    {
+        $response = $this->get('/docs/v2');
+
+        $response->assertStatus(200);
+        $response->assertSee('PPOB Engine');
+        $response->assertSee('v2 Editorial');
+        $response->assertSee('Plus Jakarta Sans', false);
+        $response->assertSee('Ikhtisar &amp; Arsitektur', false);
+    }
+
     public function test_openapi_yaml_spec_endpoint_returns_valid_spec(): void
     {
         $response = $this->get('/docs/openapi.yaml');

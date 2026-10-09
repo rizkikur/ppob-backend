@@ -23,6 +23,20 @@ class DocsController extends Controller
     }
 
     /**
+     * Display the v2 Claude-styled documentation portal.
+     */
+    public function v2(Request $request)
+    {
+        return view('docs.v2', [
+            'swaggerSpecUrl' => url('/docs/openapi.yaml'),
+            'yamlDownloadUrl' => url('/docs/openapi.yaml?download=1'),
+            'postmanCollectionUrl' => url('/docs/postman/collection'),
+            'postmanEnvironmentUrl' => url('/docs/postman/environment'),
+            'appVersion' => 'v0.12.0',
+        ]);
+    }
+
+    /**
      * Serve the raw OpenAPI YAML file or prompt download.
      */
     public function spec(Request $request)

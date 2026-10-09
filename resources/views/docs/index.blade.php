@@ -834,6 +834,9 @@
 
             <!-- Header Quick Actions -->
             <div class="header-actions">
+                <a href="/docs/v2" class="btn-action btn-action-secondary" style="border-color: rgba(217, 119, 87, 0.4); color: #e48667;" title="Beralih ke tampilan Claude Docs v2">
+                    <span>✨</span> Claude Docs v2
+                </a>
                 <button class="btn-action btn-action-secondary" onclick="copySpecUrl()">
                     <span>📋</span> Salin Link YAML
                 </button>
