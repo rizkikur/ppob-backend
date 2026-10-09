@@ -15,6 +15,8 @@ servers:
     description: Local Development
 
 tags:
+  - name: Home
+    description: Dashboard dan ringkasan mobile app
   - name: Auth
     description: Autentikasi dan manajemen sesi
   - name: Security
@@ -102,6 +104,9 @@ components:
           type: string
           example: "+6281234567890"
         email:
+          type: string
+          nullable: true
+        fcm_token:
           type: string
           nullable: true
         is_verified:
@@ -204,6 +209,41 @@ components:
           type: string
           format: date-time
 
+    WalletChannelResource:
+      type: object
+      properties:
+        code:
+          type: string
+          example: bca_va
+        name:
+          type: string
+          example: BCA Virtual Account
+        type:
+          type: string
+          enum: [virtual_account, qris, bank_transfer]
+        icon_url:
+          type: string
+          example: "https://assets.example.com/icons/bca.png"
+        fee:
+          type: integer
+          description: Biaya admin dalam satuan cents
+          example: 200000
+        fee_display:
+          type: string
+          example: "Rp 2.000,00"
+        min_amount:
+          type: integer
+          description: Minimal top-up dalam satuan cents
+          example: 1000000
+        max_amount:
+          type: integer
+          description: Maksimal top-up dalam satuan cents
+          example: 1000000000
+        instructions:
+          type: array
+          items:
+            type: string
+
     # ── Product ──
     CategoryResource:
       type: object
@@ -251,6 +291,48 @@ components:
           $ref: '#/components/schemas/CategoryResource'
         is_active:
           type: boolean
+
+    OperatorPrefixResource:
+      type: object
+      properties:
+        operator:
+          type: string
+          example: Telkomsel
+        products:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductResource'
+
+    # ── Home Dashboard ──
+    HomeDashboardResource:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id:
+              type: integer
+            name:
+              type: string
+            phone:
+              type: string
+            email:
+              type: string
+              nullable: true
+            tier:
+              type: string
+            has_pin:
+              type: boolean
+        wallet:
+          $ref: '#/components/schemas/WalletResource'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/CategoryResource'
+        recent_transactions:
+          type: array
+          items:
+            $ref: '#/components/schemas/TransactionResource'
 
     # ── Inquiry ──
     InquiryResource:
@@ -442,6 +524,36 @@ components:
 paths:
 
   # ═══════════════════════════════
+  # HOME
+  # ═══════════════════════════════
+
+  /home:
+    get:
+      tags: [Home]
+      summary: Dashboard mobile dan ringkasan akun pengguna
+      description: Mengambil data pengguna, saldo dompet terkini, daftar kategori produk aktif, dan 5 mutasi/transaksi terakhir.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Data home dashboard berhasil dimuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/HomeDashboardResource'
+        '401':
+          description: Belum terautentikasi
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  # ═══════════════════════════════
   # AUTH
   # ═══════════════════════════════
 
@@ -596,6 +708,76 @@ paths:
       responses:
         '200':
           description: Logout berhasil
+
+  /auth/profile:
+    put:
+      tags: [Auth]
+      summary: Update profil pengguna
+      description: Memperbarui nama dan/atau email pengguna yang sedang login.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  example: Budi Wicaksono
+                email:
+                  type: string
+                  example: budi.wicaksono@example.com
+      responses:
+        '200':
+          description: Profil berhasil diperbarui
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResource'
+        '422':
+          description: Validasi gagal (misal email sudah digunakan)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+
+  /auth/fcm-token:
+    post:
+      tags: [Auth]
+      summary: Simpan / perbarui token FCM perangkat
+      description: Mendaftarkan Firebase Cloud Messaging token untuk push notification pada perangkat mobile.
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fcm_token]
+              properties:
+                fcm_token:
+                  type: string
+                  example: "fcm_token_device_abc123xyz..."
+      responses:
+        '200':
+          description: FCM token berhasil disimpan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/UserResource'
 
   # ═══════════════════════════════
   # SECURITY (PIN)
@@ -846,6 +1028,28 @@ paths:
         '422':
           description: Validasi gagal
 
+  /wallet/channels:
+    get:
+      tags: [Wallet]
+      summary: Daftar kanal pembayaran untuk top-up
+      description: Mengembalikan daftar metode pembayaran yang tersedia (Virtual Account, QRIS / E-Wallet, Transfer Bank Manual) beserta biaya admin dan batas nominal.
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: Daftar kanal pembayaran berhasil dimuat
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/WalletChannelResource'
+
   # ═══════════════════════════════
   # PRODUCT
   # ═══════════════════════════════
@@ -902,6 +1106,46 @@ paths:
                         type: array
                         items:
                           $ref: '#/components/schemas/ProductResource'
+
+  /products/operator-prefix:
+    get:
+      tags: [Product]
+      summary: Deteksi operator otomatis berdasarkan nomor HP dan katalog produk terkait
+      description: Memeriksa prefix nomor seluler pengguna dan mengembalikan daftar produk pulsa & paket data aktif dengan harga tier pengguna yang login.
+      security:
+        - BearerAuth: []
+      parameters:
+        - in: query
+          name: phone
+          required: true
+          description: Nomor ponsel yang akan dideteksi prefix-nya (contoh 08123456789)
+          schema:
+            type: string
+            example: "08123456789"
+      responses:
+        '200':
+          description: Operator berhasil dideteksi dan produk terkait dikembalikan
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/SuccessResponse'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/OperatorPrefixResource'
+        '400':
+          description: Parameter nomor telepon tidak disertakan
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Operator seluler untuk prefix tersebut tidak dikenali
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
 
   # ═══════════════════════════════
   # INQUIRY

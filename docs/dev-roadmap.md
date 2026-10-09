@@ -170,6 +170,21 @@ Dependensi: Phase 6
 
 ---
 
+### Phase 9 — Mobile App Convenience APIs & User Profile
+
+Dependensi: Phase 1, Phase 3, Phase 4, Phase 6
+
+| No  | Item                                          | Status         | Catatan                                          |
+|-----|-----------------------------------------------|----------------|--------------------------------------------------|
+| 9.1 | Endpoint: `GET /home` (Dashboard Mobile)      | ✅ Selesai     | Aggregasi user info, saldo wallet, kategori produk, dan 5 mutasi/transaksi terkini |
+| 9.2 | Service: `PhoneOperatorService`               | ✅ Selesai     | Deteksi otomatis operator seluler Indonesia (Telkomsel, Indosat, XL/Axis, Tri, Smartfren) |
+| 9.3 | Endpoint: `GET /products/operator-prefix`     | ✅ Selesai     | Prefix filter produk pulsa/data dengan harga tier user |
+| 9.4 | Endpoint: `GET /wallet/channels`              | ✅ Selesai     | Daftar metode topup wallet (VA, QRIS/E-Wallet, Transfer Bank) beserta fee & limit |
+| 9.5 | Endpoint: `PUT /auth/profile`                 | ✅ Selesai     | Update nama dan email pengguna |
+| 9.6 | Endpoint: `POST /auth/fcm-token`              | ✅ Selesai     | Registrasi token FCM perangkat mobile untuk push notifications |
+| 9.7 | Feature test: Mobile suite end-to-end         | ✅ Selesai     | 14 test cases di `tests/Feature/Mobile/*` (HomeDashboard, OperatorPrefix, WalletChannels, UserProfileFcm) |
+
+---
 
 ## Dependensi Antar Phase
 
@@ -182,6 +197,7 @@ Phase 0 (Foundation)
                             └── Phase 3 (Wallet) ─── Phase 2
                             └── Phase 7 (PPOB)
                             └── Phase 8 (Partner)
+                            └── Phase 9 (Mobile Convenience APIs)
 ```
 
 ---

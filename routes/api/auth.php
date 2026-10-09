@@ -16,5 +16,7 @@ Route::post('/auth/otp/verify', [AuthController::class, 'otpVerify']);
 // Endpoint yang butuh autentikasi
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/auth/me', [AuthController::class, 'me']);
+    Route::put('/auth/profile', [AuthController::class, 'updateProfile']);
+    Route::post('/auth/fcm-token', [AuthController::class, 'updateFcmToken']);
     Route::post('/auth/logout', [AuthController::class, 'logout']);
 });

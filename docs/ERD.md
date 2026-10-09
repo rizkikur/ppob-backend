@@ -46,6 +46,7 @@ Setiap perubahan skema **harus diperbarui di dokumen ini terlebih dahulu** sebel
 | phone         | varchar(20)        | NOT NULL, UNIQUE        | Format E.164, contoh: `+6281234567890`          |
 | email         | varchar(150)       | NULLABLE, UNIQUE        |                                                 |
 | pin_hash      | varchar(255)       | NULLABLE                | bcrypt hash dari 6-digit PIN                    |
+| fcm_token     | varchar(255)       | NULLABLE                | Token perangkat mobile untuk push notifikasi    |
 | role          | varchar(20)        | NOT NULL, DEFAULT 'user'| `user` / `admin` / `super_admin` (ADR-006)      |
 | is_active     | boolean            | NOT NULL, DEFAULT true  |                                                 |
 | is_verified   | boolean            | NOT NULL, DEFAULT false | true setelah OTP pertama berhasil               |

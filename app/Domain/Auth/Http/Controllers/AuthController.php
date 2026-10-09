@@ -13,6 +13,7 @@ use App\Domain\Auth\Services\AuthService;
 use App\Domain\Shared\Http\ApiController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 /**
  * Controller autentikasi — OTP, register, verify, login, logout, me.
@@ -139,5 +140,51 @@ class AuthController extends ApiController
     public function me(Request $request): JsonResponse
     {
         return $this->success(new UserResource($request->user()->load('tier')));
+    }
+
+    /**
+     * PUT /auth/profile
+     * Perbarui data profil user (nama & email).
+     */
+    public function updateProfile(Request $request): JsonResponse
+    {
+        $user = $request->user();
+
+        $validated = $request->validate([
+            'name' => ['sometimes', 'string', 'max:100'],
+            'email' => [
+                'sometimes',
+                'nullable',
+                'email',
+                'max:150',
+                Rule::unique('users', 'email')->ignore($user->id),
+            ],
+        ]);
+
+        $user->update($validated);
+
+        return $this->success(
+            new UserResource($user->fresh(['tier'])),
+            'Profil berhasil diperbarui'
+        );
+    }
+
+    /**
+     * POST /auth/fcm-token
+     * Daftarkan atau perbarui device push notification token (FCM).
+     */
+    public function updateFcmToken(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'fcm_token' => ['required', 'string', 'max:255'],
+        ]);
+
+        $request->user()->update([
+            'fcm_token' => $validated['fcm_token'],
+        ]);
+
+        return $this->success([
+            'fcm_token' => $validated['fcm_token'],
+        ], 'Token notifikasi berhasil didaftarkan');
     }
 }

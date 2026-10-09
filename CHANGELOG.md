@@ -7,6 +7,24 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ## [Unreleased]
 
+## [v0.12.0] - 2026-10-09
+### Mobile App Convenience APIs & User Profile Enhancements
+- **Added**:
+  - Endpoint `GET /home` & `GET /api/v1/home` (`HomeController`): Dashboard ringkasan mobile app yang menyajikan profil user, saldo dompet, daftar kategori produk aktif, dan 5 transaksi/mutasi terakhir.
+  - Service `PhoneOperatorService` (`App\Domain\Product\Services\PhoneOperatorService`): Deteksi otomatis operator seluler Indonesia (Telkomsel, Indosat Ooredoo, XL / Axis, Tri, Smartfren) dari prefix nomor telepon dengan normalisasi format lokal dan internasional (+62/62/0).
+  - Endpoint `GET /products/operator-prefix` & `GET /api/v1/products/operator-prefix` (`ProductController::operatorPrefix`): Filter katalog produk pulsa & paket data berdasarkan prefix nomor telepon yang diinputkan pengguna di aplikasi mobile, lengkap dengan kalkulasi harga tier user yang sedang login.
+  - Endpoint `GET /wallet/channels` & `GET /api/v1/wallet/channels` (`TopupController::channels`): Informasi metode/kanal pembayaran top-up dompet (Virtual Account BCA/BRI/BNI/Mandiri, QRIS & E-Wallet GoPay/OVO/ShopeePay/Dana, Transfer Bank Manual) beserta biaya admin, batas minimum & maksimum, serta panduan instruksi pembayaran.
+  - Endpoint `PUT /auth/profile` & `PUT /api/v1/auth/profile` (`AuthController::updateProfile`): Pembaruan nama dan/atau email pengguna yang sedang login dengan validasi integritas data & keunikan email.
+  - Endpoint `POST /auth/fcm-token` & `POST /api/v1/auth/fcm-token` (`AuthController::updateFcmToken`): Registrasi dan pembaruan token Firebase Cloud Messaging (FCM) perangkat untuk kebutuhan notifikasi push pada mobile app.
+  - Database Migration `2026_10_09_000001_add_fcm_token_to_users_table`: Penambahan kolom `fcm_token` (nullable string) pada tabel `users`.
+  - Feature test suite mobile di `tests/Feature/Mobile/`:
+    - `HomeDashboardTest`: 3 test cases (dashboard response, unauthenticated 401, limit 5 transaksi).
+    - `OperatorPrefixTest`: 5 test cases (deteksi operator + produk, input 62/0, missing phone 400, unknown prefix 404, tier pricing calculation).
+    - `WalletChannelsTest`: 2 test cases (daftar kanal pembayaran dan detail instruksi).
+    - `UserProfileFcmTest`: 4 test cases (update profil, duplicate email 422, update FCM token, validasi FCM token).
+  - Koleksi Postman diperbarui: `docs/PPOB_Backend.postman_collection.json` dan `docs/PPOB_Local.postman_environment.json` dilengkapi folder `00. Mobile Home Dashboard`, `Operator Prefix Detection`, `Wallet Topup Channels`, `Update User Profile`, dan `Update FCM Token`.
+  - Total test suite bertambah menjadi 164 tests (622 assertions), 100% lulus.
+
 ## [v0.11.0] - 2026-10-08
 ### Async Partner Callback & Webhook Delivery Engine (ADR-007 & ADR-008)
 - **Added**:

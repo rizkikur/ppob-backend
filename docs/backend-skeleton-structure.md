@@ -119,6 +119,7 @@ laravel-project/
 │   │   │   │   ├── Provider.php
 │   │   │   │   └── ProductTierPrice.php
 │   │   │   └── Services/
+│   │   │       ├── PhoneOperatorService.php # Deteksi operator seluler dari nomor HP
 │   │   │       └── ProductPricingService.php  # Hitung harga berdasarkan tier user
 │   │   │
 │   │   ├── Inquiry/                         # Domain inquiry postpaid
@@ -172,35 +173,91 @@ laravel-project/
 │   │   │       ├── PpobService.php          # Routing ke driver yang tepat
 │   │   │       └── SupplierRoutingService.php # Failover routing multi-supplier (ADR-004/005)
 │   │   │
-│   │   └── Partner/                         # Domain Open API partner
-│   │       ├── Commands/
-│   │       │   └── RetryFailedWebhooksCommand.php # Scheduler re-dispatch callback (ADR-008)
-│   │       ├── Http/
-│   │       │   ├── Controllers/
-│   │       │   │   └── PartnerController.php
-│   │       │   ├── Middleware/
-│   │       │   │   └── PartnerAuthMiddleware.php  # Validasi API Key + HMAC
-│   │       │   ├── Requests/
-│   │       │   │   └── CreatePartnerTransactionRequest.php
-│   │       │   └── Resources/
-│   │       │       ├── PartnerProductResource.php
-│   │       │       └── PartnerTransactionResource.php
-│   │       ├── Jobs/
-│   │       │   └── DeliverWebhookJob.php    # Async callback retry exponential backoff (ADR-008)
-│   │       ├── Models/
-│   │       │   ├── Partner.php
-│   │       │   ├── PartnerLog.php
-│   │       │   ├── PartnerProductPrice.php  # Harga flat khusus partner (ADR-006)
-│   │       │   ├── PartnerRoutingRule.php   # Aturan failover per partner (ADR-004)
-│   │       │   └── WebhookDelivery.php      # Tracking retry webhook partner (ADR-008)
-│   │       └── Services/
-│   │           └── PartnerAuthService.php
-│   │
-│   ├── Http/
-│   │   └── Middleware/
-│   │       └── (default Laravel middleware)
-│   ├── Models/                              # KOSONG — semua model ada di domain
-│   └── Providers/
+│   │   ├── Partner/                         # Domain Open API partner
+│   │   │   ├── Commands/
+│   │   │   │   └── RetryFailedWebhooksCommand.php # Scheduler re-dispatch callback (ADR-008)
+│   │   │   ├── Http/
+│   │   │   │   ├── Controllers/
+│   │   │   │   │   └── PartnerController.php
+│   │   │   │   ├── Middleware/
+│   │   │   │   │   └── PartnerAuthMiddleware.php  # Validasi API Key + HMAC
+│   │   │   │   ├── Requests/
+│   │   │   │   │   └── CreatePartnerTransactionRequest.php
+│   │   │   │   └── Resources/
+│   │   │   │       ├── PartnerProductResource.php
+│   │   │   │       └── PartnerTransactionResource.php
+│   │   │   ├── Jobs/
+│   │   │   │   └── DeliverWebhookJob.php    # Async callback retry exponential backoff (ADR-008)
+│   │   │   ├── Models/
+│   │   │   │   ├── Partner.php
+│   │   │   │   ├── PartnerLog.php
+│   │   │   │   ├── PartnerProductPrice.php  # Harga flat khusus partner (ADR-006)
+│   │   │   │   ├── PartnerRoutingRule.php   # Aturan failover per partner (ADR-004)
+│   │   │   │   └── WebhookDelivery.php      # Tracking retry webhook partner (ADR-008)
+│   │   │   └── Services/
+│   │   │       └── PartnerAuthService.php
+│   │   │
+│   │   └── Shared/                              # Domain shared & mobile helpers
+│       ├── Casts/
+│       │   └── MoneyCast.php
+│       ├── Exceptions/
+│       │   └── BusinessException.php
+│       ├── Http/
+│       │   ├── ApiController.php
+│       │   ├── ApiResponse.php
+│       │   └── Controllers/
+│       │       └── HomeController.php       # Dashboard summary untuk mobile app
+│       ├── Middleware/
+│       │   ├── IdempotencyMiddleware.php
+│       │   └── PinTokenMiddleware.php
+│       └── ValueObjects/
+│           └── Money.php
+│
+├── database/
+│   ├── migrations/
+│   │   ├── 2026_10_01_000001_create_user_tiers_table.php
+│   │   ├── 2026_10_01_000002_create_users_table.php
+│   │   ├── 2026_10_01_000003_create_otp_codes_table.php
+│   │   ├── 2026_10_01_000004_create_pin_verification_tokens_table.php
+│   │   ├── 2026_10_01_000005_create_wallets_table.php
+│   │   ├── 2026_10_01_000006_create_wallet_mutations_table.php
+│   │   ├── 2026_10_01_000007_create_topup_requests_table.php
+│   │   ├── 2026_10_01_000008_create_product_categories_table.php
+│   │   ├── 2026_10_01_000009_create_providers_table.php
+│   │   ├── 2026_10_01_000010_create_products_table.php
+│   │   ├── 2026_10_01_000011_create_product_tier_prices_table.php
+│   │   ├── 2026_10_01_000012_create_inquiries_table.php
+│   │   ├── 2026_10_01_000013_create_transactions_table.php   ← raw SQL partisi
+│   │   ├── 2026_10_01_000014_create_idempotency_keys_table.php
+│   │   ├── 2026_10_01_000015_create_processed_webhook_events_table.php
+│   │   ├── 2026_10_01_000016_create_partners_table.php
+│   │   ├── 2026_10_01_000017_create_partner_logs_table.php
+│   │   ├── 2026_10_05_000001_add_adr_columns_to_existing_tables.php
+│   │   ├── 2026_10_05_000002_create_routing_tables.php
+│   │   ├── 2026_10_05_000003_create_partner_product_prices_table.php
+│   │   ├── 2026_10_05_000004_create_webhook_deliveries_table.php
+│   │   ├── 2026_10_05_000005_create_monitoring_tables.php
+│   │   ├── 2026_10_06_000001_add_user_id_to_partners_table.php
+│   │   └── 2026_10_09_000001_add_fcm_token_to_users_table.php
+│
+│   └── seeders/
+│       ├── DatabaseSeeder.php
+│       ├── UserTierSeeder.php
+│       ├── ProductCategorySeeder.php
+│       └── ProviderSeeder.php
+│
+├── routes/
+│   ├── api.php                              # Import sub-route files
+│   ├── api/
+│   │   ├── auth.php                        # /auth/*, /auth/profile, /auth/fcm-token
+│   │   ├── security.php                    # /security/*
+│   │   ├── wallet.php                      # /wallet/*, /wallet/channels
+│   │   ├── products.php                    # /products/*, /products/operator-prefix
+│   │   ├── inquiry.php                     # /inquiry/*
+│   │   ├── transactions.php                # /transactions/*
+│   │   ├── webhooks.php                    # /ppob/callback, /wallet/callback
+│   │   └── home.php                        # /home (Dashboard Mobile)
+│   └── partner.php                         # /partner/* (Open API)oviders/
 │       ├── AppServiceProvider.php
 │       └── DomainServiceProvider.php       # Register semua binding domain
 │

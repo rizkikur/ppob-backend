@@ -31,6 +31,7 @@ class User extends Authenticatable
         'email',
         'pin_hash',
         'role',
+        'fcm_token',
         'is_active',
         'is_verified',
     ];
