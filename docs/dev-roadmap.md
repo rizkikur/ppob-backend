@@ -183,6 +183,7 @@ Dependensi: Phase 1, Phase 3, Phase 4, Phase 6
 | 9.5 | Endpoint: `PUT /auth/profile`                 | ✅ Selesai     | Update nama dan email pengguna |
 | 9.6 | Endpoint: `POST /auth/fcm-token`              | ✅ Selesai     | Registrasi token FCM perangkat mobile untuk push notifications |
 | 9.7 | Feature test: Mobile suite end-to-end         | ✅ Selesai     | 14 test cases di `tests/Feature/Mobile/*` (HomeDashboard, OperatorPrefix, WalletChannels, UserProfileFcm) |
+| 9.8 | Portal: Interactive Developer Docs & Swagger Hub | ✅ Selesai | Portal web di `/docs` & `/` dengan Swagger UI 5, panduan arsitektur, dan ekspor OpenAPI `.yaml` & Postman |
 
 ---
 

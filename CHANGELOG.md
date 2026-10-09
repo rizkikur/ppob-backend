@@ -23,7 +23,12 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
     - `WalletChannelsTest`: 2 test cases (daftar kanal pembayaran dan detail instruksi).
     - `UserProfileFcmTest`: 4 test cases (update profil, duplicate email 422, update FCM token, validasi FCM token).
   - Koleksi Postman diperbarui: `docs/PPOB_Backend.postman_collection.json` dan `docs/PPOB_Local.postman_environment.json` dilengkapi folder `00. Mobile Home Dashboard`, `Operator Prefix Detection`, `Wallet Topup Channels`, `Update User Profile`, dan `Update FCM Token`.
-  - Total test suite bertambah menjadi 164 tests (622 assertions), 100% lulus.
+  - Web Developer Portal & Swagger Spec Hub (`App\Domain\Shared\Http\Controllers\DocsController`):
+    - Portal interaktif di `/docs` (dan `/`) dengan tampilan bertema dark/glassmorphic modern yang mengintegrasikan Swagger UI 5 Playground, panduan arsitektur pengembang, dan download hub.
+    - Endpoint `/docs/openapi.yaml` (inline spec & download parameter) yang kompatibel dengan Swagger Editor / Postman / Insomnia.
+    - Endpoint unduhan koleksi Postman di `/docs/postman/collection` dan environment di `/docs/postman/environment`.
+    - Feature test suite di `tests/Feature/Docs/ApiDocumentationTest.php` (6 test cases).
+  - Total test suite bertambah menjadi 170 tests (649 assertions), 100% lulus.
 
 ## [v0.11.0] - 2026-10-08
 ### Async Partner Callback & Webhook Delivery Engine (ADR-007 & ADR-008)
