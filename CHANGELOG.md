@@ -7,6 +7,33 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ## [Unreleased]
 
+## [v1.0.0] - 2026-10-14
+### Phase 10 — Web Admin Backoffice Panel (Ready to Live)
+- **Added**:
+  - **Auth & Keamanan Fondasi (Step 1)**:
+    - Multi-role admin (`super_admin`, `finance_admin`, `ops_admin`) dengan tabel `admins` terisolasi dan session guard `admin`.
+    - Perlindungan brute-force login (5 attempt per 5 menit per IP), password confirmation window (3 jam), CSP Nonce header, dan 2FA TOTP self-service.
+  - **Monitoring Realtime & Dashboard (Step 2)**:
+    - Widget KPI Realtime (GMV, Profit, Volume Transaksi, Success Rate) dengan profit masking untuk role `ops`.
+    - Status Circuit Breaker per provider dan grafik tren transaksi 24 jam via Chart.js dengan polling Alpine.js 10 detik auto-pause saat inactive tab.
+  - **Manajemen Transaksi & Intervensi Manual (Step 3)**:
+    - Tabel transaksi dengan multi-dimensi filter, timeline lifecycle, struk thermal 58mm/80mm, dan generator pesan WhatsApp.
+    - Intervensi aman: Re-query status provider, Manual Refund via `WalletService::credit()`, dan Status Override dengan perlindungan password confirm dan audit log.
+  - **Produk, SKU & Circuit Breaker (Step 4)**:
+    - Sinkronisasi pricelist provider otomatis, matriks harga tiering anti-margin negatif, dan emergency provider freeze.
+    - Reset manual trip circuit breaker, konfigurasi threshold dinamis (failure rate, threshold, recovery timeout), dan failover routing priority.
+  - **Mitra B2B & Kredensial API (Step 5)**:
+    - Pengelolaan mitra B2B/H2H dengan pembuatan modal rahasia Stripe-style One-Time API Secret Display (DB encrypted).
+    - Rotasi API Key & Secret terlindungi password confirm, validator IP Whitelist dengan dukungan subnet mask CIDR, kustomisasi harga produk mitra, dan re-dispatch webhook manual.
+  - **Keuangan, Mutasi Ledger & Rekonsiliasi Upstream (Step 6)**:
+    - Approval & Rejection permohonan top-up saldo manual secara atomik (`lockForUpdate`), penyesuaian saldo manual via `WalletService` dengan validasi alasan minimum 15 karakter.
+    - Viewer buku besar mutasi double-entry append-only dengan cursor pagination, rekonsiliasi perbandingan saldo deposit internal vs upstream provider, serta streaming ekspor mutasi ke CSV.
+  - **Audit Trail & Viewer Aktivitas (Step 7 / Item 10.21)**:
+    - Halaman viewer `/admin/audit-logs` read-only untuk memantau seluruh aktivitas administratif sistem append-only.
+    - Filter berdasarkan admin, aksi, tipe target, rentang tanggal, dan kata kunci pencarian.
+    - Modal interaktif Alpine.js untuk inspeksi payload data `changes` (JSON diff), alamat IP, dan user agent browser.
+  - **Total Feature Tests Admin**: 113 automated feature tests (466 assertions), 100% lulus.
+
 ## [v0.12.0] - 2026-10-09
 ### Mobile App Convenience APIs & User Profile Enhancements
 - **Added**:

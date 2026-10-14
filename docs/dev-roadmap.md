@@ -187,6 +187,42 @@ Dependensi: Phase 1, Phase 3, Phase 4, Phase 6
 
 ---
 
+### Phase 10 — Admin Web (Backoffice Panel)
+
+Dependensi: Phase 1, Phase 3 (WalletService), Phase 7 (CircuitBreakerService), Phase 8 (DeliverWebhookJob)
+
+> Dokumen acuan: `docs/admin-web-architecture.md` (revisi 2026-10-12)
+> Task Specs: [`docs/task-specs/phase-10-admin-web.md`](file:///c:/Users/R/Documents/project%20baru/laravel-project/docs/task-specs/phase-10-admin-web.md) (Master + Step 1 s/d Step 6)
+> Stack: Blade SSR + Alpine.js 3 + **Tailwind CSS v4** + Chart.js CDN
+> Guard: `auth:admin` dengan tabel `admins` terpisah dari `users`
+
+| No   | Item                                                    | Status       | Catatan                                                              |
+|------|---------------------------------------------------------|--------------|----------------------------------------------------------------------|
+| 10.1 | Migration: `admins` + `admin_audit_logs`                | ✅ Selesai   | Tabel admins (2FA schema ready), audit log append-only (2026-10-12)  |
+| 10.2 | Guard `admin` di `config/auth.php` + Model `Admin`      | ✅ Selesai   | Provider `admins`, model di `app/Domain/Admin/Models/` (2026-10-12)  |
+| 10.3 | `AdminLoginController` + rate limit (5/5mnt per IP)     | ✅ Selesai   | Session regeneration, seeder `superadmin@ppob.test` (2026-10-12)     |
+| 10.4 | Middleware stack: Auth, Role, ActivityLog, SecurityHeaders | ✅ Selesai | CSP header dengan nonce, HSTS, 2FA challenge check (2026-10-12)     |
+| 10.5 | Gate definitions granular per aksi                      | ✅ Selesai   | `access-finance`, `manage-admins`, `toggle-providers`, dll (2026-10-12)|
+| 10.6 | Layout master Blade (Tailwind v4, Alpine.js 3, sidebar) | ✅ Selesai   | app.blade.php + guest.blade.php (login page) (2026-10-12)            |
+| 10.7 | Feature test: auth flow, rate limit, role middleware     | ✅ Selesai   | 25 feature test lulus: Login, 2FA, brute force, timeout 3 jam        |
+| 10.8 | `AdminDashboardService` + Redis cache KPI               | ✅ Selesai   | Agregasi GMV, Profit, Success rate, Circuit Breaker, Caching (2026-10-12) |
+| 10.9 | Dashboard view: KPI cards, Chart.js, CB status, live feed| ✅ Selesai   | Polling Alpine.js 10s auto-pause saat inactive tab (2026-10-12)      |
+| 10.10| Feature test: dashboard KPI accuracy & cache            | ✅ Selesai   | 9 feature test lulus: agregasi, profit masking, CB alert, cache (2026-10-12) |
+| 10.11| `TransactionController` + pagination + filter           | ✅ Selesai   | Filter multidimensi, detail view, masked payload, audit trail (2026-10-12) |
+| 10.12| Manual refund via `AdminTransactionManagementService → WalletService`| ✅ Selesai | Password confirmation, append-only credit, audit log (2026-10-12) |
+| 10.13| Feature test: requery + refund + status override + audit| ✅ Selesai   | 16 feature test transaksi lulus: filter, detail, requery, refund, override (2026-10-12) |
+| 10.14| Produk & routing: toggle, harga tier, CB config         | ✅ Selesai   | Matriks tier margin, emergency provider toggle, reset CB, routing priority (2026-10-12) |
+| 10.15| Feature test: product CRUD + price tier + CB reset      | ✅ Selesai   | 15 feature test produk/provider: CRUD, margin negatif block, toggle, CB reset (2026-10-12) |
+| 10.16| Mitra B2B: API key, IP whitelist, deposit mitra         | ✅ Selesai   | One-time secret display, IP validator CIDR, deposit via WalletService (2026-10-14) |
+| 10.17| Webhook audit & re-dispatch manual                      | ✅ Selesai   | Delivery log, retry webhook dispatch via Queue Job (2026-10-14)      |
+| 10.18| Feature test: partner management + deposit              | ✅ Selesai   | 18 feature test mitra, credential rotation, IP whitelist, webhook replay (2026-10-14) |
+| 10.19| Approval top-up via `TopupService::approve()`           | ✅ Selesai   | Password confirmation, atomik lockForUpdate, tidak bisa approve duplikat (2026-10-14) |
+| 10.20| Ledger audit + rekonsiliasi summary                     | ✅ Selesai   | Pagination wallet_mutations, rekonsiliasi deposit upstream, export streaming CSV (2026-10-14) |
+| 10.21| Audit Log Admin viewer (read-only)                      | ✅ Selesai   | Filter admin/aksi/target/tanggal, modal diff payload JSON, detail view (2026-10-14) |
+| 10.22| Feature test: approval atomik + ledger konsistensi      | ✅ Selesai   | 16 feature test finance: approval, adjustment, ledger, rekonsiliasi, streaming CSV (2026-10-14) |
+
+---
+
 ## Dependensi Antar Phase
 
 ```
@@ -199,6 +235,8 @@ Phase 0 (Foundation)
                             └── Phase 7 (PPOB)
                             └── Phase 8 (Partner)
                             └── Phase 9 (Mobile Convenience APIs)
+
+    └── Phase 10 (Admin Web) ─── Phase 1, Phase 3, Phase 7, Phase 8
 ```
 
 ---
@@ -211,3 +249,13 @@ Sebuah item dianggap **selesai** jika:
 - [ ] Semua test yang wajib ada (idempotency, race condition, validasi) sudah lulus
 - [ ] Dokumen yang relevan (ERD, security-design) sudah diperbarui jika ada perubahan skema
 - [ ] `./vendor/bin/phpstan analyse` tidak ada error di level konfigurasi saat ini
+- [ ] `./vendor/bin/pint` dijalankan, tidak ada style error
+- [ ] `CHANGELOG.md` diperbarui dengan entry yang sesuai
+
+### Tambahan untuk Phase 10 (Admin Web)
+- [ ] Tidak ada aksi finansial yang bypass `WalletService`
+- [ ] Semua aksi kritis tercatat di `admin_activity_logs`
+- [ ] CSP header terpasang di semua response admin
+- [ ] Session regeneration terimplementasi setelah login
+- [ ] Semua form menggunakan `@csrf`
+- [ ] Gate (otorisasi granular) tertest untuk setiap aksi kritis

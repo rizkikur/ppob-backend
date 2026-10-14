@@ -257,7 +257,8 @@ laravel-project/
 │   │   ├── transactions.php                # /transactions/*
 │   │   ├── webhooks.php                    # /ppob/callback, /wallet/callback
 │   │   └── home.php                        # /home (Dashboard Mobile)
-│   └── partner.php                         # /partner/* (Open API)oviders/
+│   ├── partner.php                         # /partner/* (Open API)
+│   └── admin.php                          # /admin/* (Backoffice Web, guard: auth:admin) ← Phase 10
 │       ├── AppServiceProvider.php
 │       └── DomainServiceProvider.php       # Register semua binding domain
 │
