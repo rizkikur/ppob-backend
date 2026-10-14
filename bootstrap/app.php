@@ -1,5 +1,8 @@
 <?php
 
+use App\Domain\Admin\Http\Middleware\AdminContentSecurityPolicy;
+use App\Domain\Admin\Http\Middleware\AdminRoleMiddleware;
+use App\Domain\Admin\Http\Middleware\EnsureTwoFactorAuthenticated;
 use App\Domain\Shared\Http\ApiResponse;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
@@ -19,14 +22,36 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: '',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        $middleware->redirectGuestsTo(function (Request $request) {
+            $prefix = config('admin.prefix', 'office');
+            if ($request->is("{$prefix}*") || $request->is('admin*')) {
+                return route('admin.login');
+            }
+
+            return '/login';
+        });
+
+        $middleware->alias([
+            'admin.csp' => AdminContentSecurityPolicy::class,
+            'admin.role' => AdminRoleMiddleware::class,
+            'admin.2fa' => EnsureTwoFactorAuthenticated::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => true,
+            function (Request $request) {
+                $prefix = config('admin.prefix', 'office');
+
+                return $request->expectsJson() || (! $request->is("{$prefix}*") && ! $request->is('admin*') && ! $request->is('docs*') && $request->path() !== '/');
+            }
         );
 
         $exceptions->render(function (ValidationException $e, Request $request) {
+            $prefix = config('admin.prefix', 'office');
+            if (($request->is("{$prefix}*") || $request->is('admin*')) && ! $request->expectsJson()) {
+                return null;
+            }
+
             return ApiResponse::validationError(
                 $e->errors(),
                 'Input tidak valid'
@@ -34,18 +59,32 @@ return Application::configure(basePath: dirname(__DIR__))
         });
 
         $exceptions->render(function (AuthenticationException $e, Request $request) {
+            $prefix = config('admin.prefix', 'office');
+            if (($request->is("{$prefix}*") || $request->is('admin*')) && ! $request->expectsJson()) {
+                return redirect()->guest(route('admin.login'));
+            }
+
             return ApiResponse::unauthenticated(
                 'Autentikasi diperlukan'
             );
         });
 
         $exceptions->render(function (ModelNotFoundException $e, Request $request) {
+            $prefix = config('admin.prefix', 'office');
+            if (($request->is("{$prefix}*") || $request->is('admin*')) && ! $request->expectsJson()) {
+                return null;
+            }
+
             return ApiResponse::notFound(
                 'Resource tidak ditemukan'
             );
         });
 
         $exceptions->render(function (NotFoundHttpException $e, Request $request) {
+            if ($request->is('admin*') && ! $request->expectsJson()) {
+                return null;
+            }
+
             return ApiResponse::notFound(
                 'Resource tidak ditemukan'
             );
