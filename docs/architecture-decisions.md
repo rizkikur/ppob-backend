@@ -384,11 +384,53 @@ Semua keputusan sudah disepakati per **2026-10-05**. Tidak ada ADR yang masih Dr
 | ADR | Status |
 |-----|--------|
 | ADR-001 s/d ADR-010 | ✅ Semua Disepakati |
+| ADR-011 | ✅ Disepakati (2026-10-12) |
 
 - [ ] Detail format protokol OTOMAX (request/response field, auth method)
 - [ ] Detail format protokol IRS
-- [ ] Apakah perlu admin panel terpisah, atau cukup endpoint admin di API yang sama?
+- [x] ~~Apakah perlu admin panel terpisah, atau cukup endpoint admin di API yang sama?~~ → **ADR-011: tabel `admins` terpisah + guard `auth:admin`**
 - [ ] Pricing engine untuk klien H2H: apakah pakai `partner_product_prices` terpisah
       dari `product_tier_prices`?
 - [ ] Supplier balance API: apakah semua supplier support pull saldo programmatik?
 - [ ] Format laporan rekonsiliasi dari masing-masing supplier
+
+---
+
+## ADR-011 — Admin Web: Tabel `admins` Terpisah vs Field `role` di `users`
+
+**Tanggal:** 2026-10-12
+**Status:** Disepakati
+
+**Konteks:**
+ADR-006 mendefinisikan field `role` di tabel `users` (`user`/`admin`/`super_admin`) untuk
+multi-protocol API. Dokumen `admin-web-architecture.md` mengusulkan tabel `admins` terpisah
+dengan guard `auth:admin`. Keduanya sempat tampak konflik.
+
+**Keputusan:**
+Gunakan **dua mekanisme yang berdampingan untuk dua persona yang berbeda**:
+
+1. **Tabel `admins` + guard `auth:admin`** — untuk **admin panel web** (`/admin/*`).
+   Autentikasi berbasis session (cookie), bukan token Sanctum.
+
+2. **Field `role` di tabel `users`** — dipertahankan untuk kebutuhan **OTOMAX/IRS H2H protocol**
+   di masa depan (jika diperlukan diferensiasi role di API level).
+
+**Justifikasi tabel terpisah**:
+- **Prinsip Least Privilege**: Admin web tidak boleh bisa mengakses endpoint mobile `/api/v1/*`
+  dengan credentials admin, dan sebaliknya.
+- **Isolasi blast radius**: Compromise satu guard tidak mengexpose guard lain.
+- **Audit trail bersih**: Model `Admin` berbeda dari model `User`, sehingga audit log
+  (`admin_activity_logs`) terisolasi dari aktivitas konsumen.
+- **Perbedaan autentikasi fundamental**: Admin → email + password + session.
+  Konsumen → nomor HP + OTP WhatsApp + Sanctum token.
+- **Mekanisme yang berbeda**: Admin panel butuh CSRF protection (session-based),
+  konsumen API butuh stateless token.
+
+**Konsekuensi:**
+- Tabel baru: `admins` (lihat `admin-web-architecture.md` §3.2)
+- Tabel baru: `admin_activity_logs` (append-only, compliance)
+- Guard baru di `config/auth.php`: `'admin' => ['driver' => 'session', 'provider' => 'admins']`
+- Model baru: `App\Domain\Admin\Models\Admin` (bukan `App\Domain\Auth\Models\User`)
+- Route group `/admin/*` dengan middleware `auth:admin` (bukan `auth:sanctum`)
+- Field `role` di `users` tetap ada, digunakan jika OTOMAX/IRS memerlukan diferensiasi di masa depan
+

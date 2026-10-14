@@ -53,6 +53,11 @@ class User extends Authenticatable
         return $this->belongsTo(UserTier::class, 'user_tier_id');
     }
 
+    public function userTier(): BelongsTo
+    {
+        return $this->tier();
+    }
+
     /**
      * Forward declaration — Wallet domain belum ada, gunakan string class.
      */
