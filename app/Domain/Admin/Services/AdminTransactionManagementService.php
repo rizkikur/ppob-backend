@@ -9,7 +9,7 @@ use App\Domain\Ppob\Services\PpobService;
 use App\Domain\Transaction\Models\Transaction;
 use App\Domain\Wallet\Models\WalletMutation;
 use App\Domain\Wallet\Services\WalletService;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -111,13 +111,13 @@ class AdminTransactionManagementService
     }
 
     /**
-     * Filter and paginate transactions with related relations.
+     * Filter and paginate transactions with related relations using zero-count simplePaginate.
      *
      * @param  array<string, mixed>  $filters
      */
-    public function filterTransactions(array $filters): LengthAwarePaginator
+    public function filterTransactions(array $filters): Paginator
     {
-        return $this->buildQuery($filters)->paginate(25)->withQueryString();
+        return $this->buildQuery($filters)->simplePaginate(25)->withQueryString();
     }
 
     /**

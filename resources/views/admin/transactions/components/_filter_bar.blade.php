@@ -37,7 +37,7 @@
         }
      }"
      class="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-5 shadow-xl">
-    <form method="GET" action="{{ route('admin.transactions.index') }}" class="space-y-4">
+    <form data-filter-form method="GET" action="{{ route('admin.transactions.index') }}" @submit.prevent="applyFilter($event)" class="space-y-4">
         {{-- Row 1: Search & Primary Dropdowns in Flexible Row --}}
         <div class="flex flex-col lg:flex-row gap-3.5 items-stretch lg:items-end">
             {{-- Search Input (Wide Flexible Grow) --}}
@@ -167,19 +167,19 @@
                 </button>
 
                 {{-- Reset Filter Button --}}
-                @if(request()->hasAny(['q', 'status', 'provider_id', 'is_failover', 'partner_id', 'date_start', 'date_end']))
-                    <a href="{{ route('admin.transactions.index') }}"
-                       class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl border border-transparent hover:border-slate-700 transition-all">
-                        Reset Filter
-                    </a>
-                @endif
+                <button type="button"
+                        @click.prevent="resetFilter('{{ route('admin.transactions.index') }}')"
+                        class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl border border-transparent hover:border-slate-700 transition-all">
+                    Reset Filter
+                </button>
 
                 {{-- Export CSV Button --}}
-                <a href="{{ route('admin.transactions.index', array_merge(request()->query(), ['export' => 'csv'])) }}"
-                   class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
+                <button type="button"
+                        @click="exportCsv('{{ route('admin.transactions.index') }}')"
+                        class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
                     <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                     <span>CSV</span>
-                </a>
+                </button>
 
                 {{-- Apply Filter Button --}}
                 <button type="submit"

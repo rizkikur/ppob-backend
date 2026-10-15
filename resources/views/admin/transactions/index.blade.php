@@ -1,5 +1,5 @@
 <x-admin.layouts.app>
-    <div x-data="transactionLiveMonitor()" x-init="initMonitor()" class="space-y-6">
+    <div x-data="transactionTableManager()" x-init="initManager()" class="space-y-6">
         {{-- Flash Alerts --}}
         @if(session('success'))
             <div class="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center justify-between">
@@ -43,12 +43,12 @@
         {{-- Filter & Search Bar --}}
         @include('admin.transactions.components._filter_bar')
 
-        {{-- Transactions Table Container for Live Auto-Refresh --}}
+        {{-- Transactions Table Container for AJAX & Live Auto-Refresh --}}
         <div id="transaction-table-container" class="relative">
-            {{-- Loading Overlay --}}
+            {{-- Instant Shimmer / Spinner Loading Overlay (0ms perceived latency) --}}
             <div x-show="isFetching" x-cloak
-                 class="absolute inset-0 z-20 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center rounded-2xl transition-all">
-                <div class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-slate-900/90 border border-indigo-500/40 text-indigo-300 text-xs font-medium shadow-2xl">
+                 class="absolute inset-0 z-20 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center rounded-2xl transition-all">
+                <div class="inline-flex items-center gap-2.5 px-4 py-2.5 rounded-2xl bg-slate-900 border border-indigo-500/40 text-indigo-300 text-xs font-semibold shadow-2xl">
                     <svg class="w-4 h-4 animate-spin text-indigo-400" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
                     <span>Memperbarui data transaksi...</span>
                 </div>
@@ -58,9 +58,9 @@
         </div>
     </div>
 
-    {{-- Live Polling Script --}}
+    {{-- Transaction Table Manager Script (Clean URL, AJAX Filter & Pagination) --}}
     <script nonce="{{ $csp_nonce ?? '' }}">
-        function transactionLiveMonitor() {
+        function transactionTableManager() {
             return {
                 liveEnabled: false,
                 countdown: 15,
@@ -68,7 +68,13 @@
                 isFetching: false,
                 lastUpdated: 'Baru saja',
 
-                initMonitor() {
+                initManager() {
+                    // 1. Dukungan tombol Back / Forward browser
+                    window.addEventListener('popstate', () => {
+                        this.fetchTable(window.location.href, false);
+                    });
+
+                    // 2. Pause live polling saat tab tidak aktif
                     document.addEventListener('visibilitychange', () => {
                         if (document.hidden && this.liveEnabled) {
                             this.pausePolling();
@@ -76,8 +82,136 @@
                             this.startPolling();
                         }
                     });
+
+                    // 3. Tangani klik pagination Next/Prev via AJAX
+                    const container = document.getElementById('transaction-table-container');
+                    if (container) {
+                        container.addEventListener('click', (e) => {
+                            const link = e.target.closest('[data-pagination-link]');
+                            if (link && link.href) {
+                                e.preventDefault();
+                                this.fetchTable(link.href, true);
+                            }
+                        });
+                    }
                 },
 
+                // Membuat URL Bersih: HANYA memasukkan parameter yang TIDAK KOSONG
+                buildCleanUrl(form, extraParams = {}) {
+                    const formData = new FormData(form);
+                    const params = new URLSearchParams();
+
+                    for (const [key, value] of formData.entries()) {
+                        const trimmed = typeof value === 'string' ? value.trim() : value;
+                        // Abaikan parameter kosong (misal q="", status="", provider_id="")
+                        if (trimmed !== '') {
+                            params.append(key, trimmed);
+                        }
+                    }
+
+                    for (const [key, value] of Object.entries(extraParams)) {
+                        if (value !== null && value !== undefined && value !== '') {
+                            params.append(key, value);
+                        }
+                    }
+
+                    const cleanQuery = params.toString();
+                    const baseUrl = form.getAttribute('action') || window.location.pathname;
+                    return cleanQuery ? `${baseUrl}?${cleanQuery}` : baseUrl;
+                },
+
+                // Terapkan Filter via AJAX tanpa reload halaman
+                applyFilter(e) {
+                    const form = e.target.closest('form');
+                    if (!form) return;
+                    const cleanUrl = this.buildCleanUrl(form);
+                    this.fetchTable(cleanUrl, true);
+                },
+
+                // Reset Filter: bersihkan input dan load URL default
+                resetFilter(resetUrl) {
+                    const form = document.querySelector('form[data-filter-form]');
+                    if (form) {
+                        form.reset();
+                        // Bersihkan input date dan Alpine models jika ada
+                        const dateInputs = form.querySelectorAll('input[type="date"]');
+                        dateInputs.forEach(i => {
+                            i.value = '';
+                            i.dispatchEvent(new Event('input'));
+                        });
+                        const textInputs = form.querySelectorAll('input[type="text"], select');
+                        textInputs.forEach(i => {
+                            if (i.tagName === 'SELECT') i.selectedIndex = 0;
+                            else i.value = '';
+                            i.dispatchEvent(new Event('change'));
+                        });
+                    }
+                    this.fetchTable(resetUrl, true);
+                },
+
+                // Ekspor CSV dengan parameter aktif yang bersih
+                exportCsv(baseUrl) {
+                    const form = document.querySelector('form[data-filter-form]');
+                    const exportUrl = form 
+                        ? this.buildCleanUrl(form, { export: 'csv' }) 
+                        : `${baseUrl}?export=csv`;
+                    window.location.href = exportUrl;
+                },
+
+                // Ambil Partial Table via AJAX
+                async fetchTable(targetUrl = window.location.href, updateHistory = false) {
+                    if (this.isFetching) return;
+                    this.isFetching = true;
+
+                    try {
+                        const url = new URL(targetUrl, window.location.origin);
+                        if (this.liveEnabled) {
+                            url.searchParams.set('live', '1');
+                        }
+
+                        const res = await fetch(url.toString(), {
+                            headers: {
+                                'X-Requested-With': 'XMLHttpRequest',
+                                'Accept': 'text/html'
+                            }
+                        });
+
+                        if (res.ok) {
+                            const html = await res.text();
+                            const container = document.getElementById('transaction-table-container');
+                            if (container) {
+                                const parser = new DOMParser();
+                                const doc = parser.parseFromString(html, 'text/html');
+                                const newTable = doc.body.firstElementChild;
+                                if (newTable) {
+                                    const oldTable = container.querySelector('.bg-slate-800\\/80');
+                                    if (oldTable) {
+                                        oldTable.replaceWith(newTable);
+                                    } else {
+                                        container.appendChild(newTable);
+                                    }
+                                }
+                            }
+
+                            // Perbarui URL browser tanpa reload halaman (hanya jika diminta)
+                            if (updateHistory) {
+                                // Bersihkan parameter internal live jika ada
+                                const displayUrl = new URL(url.toString());
+                                displayUrl.searchParams.delete('live');
+                                window.history.pushState({}, '', displayUrl.toString());
+                            }
+
+                            const now = new Date();
+                            this.lastUpdated = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+                        }
+                    } catch (e) {
+                        console.error('Gagal memperbarui data transaksi via AJAX:', e);
+                    } finally {
+                        this.isFetching = false;
+                    }
+                },
+
+                // Fitur Live Polling 15 detik
                 toggleLive() {
                     this.liveEnabled = !this.liveEnabled;
                     if (this.liveEnabled) {
@@ -94,7 +228,7 @@
                         if (document.hidden) return;
                         this.countdown--;
                         if (this.countdown <= 0) {
-                            this.fetchTable();
+                            this.fetchTable(window.location.href, false);
                             this.countdown = 15;
                         }
                     }, 1000);
@@ -108,47 +242,6 @@
                     if (this.intervalTimer) {
                         clearInterval(this.intervalTimer);
                         this.intervalTimer = null;
-                    }
-                },
-
-                async fetchTable() {
-                    if (this.isFetching) return;
-                    this.isFetching = true;
-                    try {
-                        const url = new URL(window.location.href);
-                        url.searchParams.set('live', '1');
-
-                        const res = await fetch(url.toString(), {
-                            headers: {
-                                'X-Live-Refresh': '1',
-                                'X-Requested-With': 'XMLHttpRequest'
-                            }
-                        });
-
-                        if (res.ok) {
-                            const html = await res.text();
-                            const container = document.getElementById('transaction-table-container');
-                            if (container) {
-                                // Preserve overlay and replace inner table
-                                const parser = new DOMParser();
-                                const doc = parser.parseFromString(html, 'text/html');
-                                const newTable = doc.body.firstElementChild;
-                                if (newTable) {
-                                    const oldTable = container.querySelector('.bg-slate-800\\/80');
-                                    if (oldTable) {
-                                        oldTable.replaceWith(newTable);
-                                    } else {
-                                        container.appendChild(newTable);
-                                    }
-                                }
-                                const now = new Date();
-                                this.lastUpdated = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                            }
-                        }
-                    } catch (e) {
-                        console.error('Gagal memperbarui data transaksi:', e);
-                    } finally {
-                        this.isFetching = false;
                     }
                 }
             };
