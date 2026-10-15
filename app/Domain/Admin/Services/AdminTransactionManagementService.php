@@ -50,10 +50,24 @@ class AdminTransactionManagementService
             $query->where(function ($sub) use ($q) {
                 if (is_numeric($q)) {
                     $sub->orWhere('id', (int) $q);
+                    // Jika nomor HP Indonesia (awalan 08 atau 628), utamakan prefix match agar B-Tree index terpakai
+                    if (str_starts_with($q, '08') || str_starts_with($q, '628')) {
+                        $sub->orWhere('customer_number', 'like', "{$q}%");
+                    } else {
+                        $sub->orWhere('customer_number', 'like', "%{$q}%");
+                    }
+                } else {
+                    $sub->orWhere('customer_number', 'like', "%{$q}%");
                 }
-                $sub->orWhere('customer_number', 'like', "%{$q}%")
-                    ->orWhere('provider_ref', 'like', "%{$q}%")
-                    ->orWhere('idempotency_key', 'like', "%{$q}%");
+
+                // Jika format idempotency key / UUID, exact match ke unique index
+                if (str_starts_with($q, 'DEMO-IDEMP-') || str_starts_with($q, 'idem-') || strlen($q) === 36) {
+                    $sub->orWhere('idempotency_key', $q);
+                } else {
+                    $sub->orWhere('idempotency_key', 'like', "%{$q}%");
+                }
+
+                $sub->orWhere('provider_ref', 'like', "%{$q}%");
             });
         }
 

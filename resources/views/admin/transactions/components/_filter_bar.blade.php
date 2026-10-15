@@ -118,8 +118,9 @@
                                name="date_start"
                                x-model="dateStart"
                                @change="onStartChange($event.target.value)"
+                               @click="$el.showPicker && $el.showPicker()"
                                :max="dateEnd ? dateEnd : null"
-                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
+                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
                     </div>
                     <span class="text-xs text-slate-500 text-center font-medium">s/d</span>
                     <div class="w-full sm:w-44">
@@ -128,8 +129,9 @@
                                name="date_end"
                                x-model="dateEnd"
                                @change="onEndChange($event.target.value)"
+                               @click="$el.showPicker && $el.showPicker()"
                                :min="dateStart ? dateStart : null"
-                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
+                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
                     </div>
                 </div>
 
