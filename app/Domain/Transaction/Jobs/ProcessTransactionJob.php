@@ -48,6 +48,29 @@ class ProcessTransactionJob implements ShouldQueue
 
             $status = $result['status'] ?? 'failed';
 
+            // Deteksi kenaikan harga modal dari upstream (Point 2 user request)
+            $upstreamCostCents = $result['actual_price_cents']
+                ?? $result['cost_cents']
+                ?? (isset($result['raw']['price']) ? (int) round((float) $result['raw']['price'] * 100) : null)
+                ?? (isset($result['raw']['buyer_last_price']) ? (int) round((float) $result['raw']['buyer_last_price'] * 100) : null);
+
+            if ($upstreamCostCents !== null && $product) {
+                $currentBaseCents = $product->base_price_cents?->toCents() ?? 0;
+                if ($upstreamCostCents > $currentBaseCents) {
+                    // Modal upstream naik! Update HPP modal produk agar tidak berulang
+                    $product->update([
+                        'base_price_cents' => $upstreamCostCents,
+                    ]);
+
+                    // Jika harga modal baru melebihi harga jual transaksi (rugi) atau naik:
+                    // Segera nonaktifkan (close) produk agar kerugian terjadi 1x saja & admin bisa sosialisasi ke klien
+                    if ($upstreamCostCents >= ($tx->sell_price_cents?->toCents() ?? 0) || config('ppob.auto_freeze_on_price_hike', true)) {
+                        $product->update(['is_active' => false]);
+                        \Illuminate\Support\Facades\Log::warning("Produk {$product->sku_code} dinonaktifkan otomatis karena kenaikan modal upstream ({$currentBaseCents} -> {$upstreamCostCents})");
+                    }
+                }
+            }
+
             if ($status === 'success') {
                 $transactionService->markSuccess(
                     $tx,
@@ -61,12 +84,26 @@ class ProcessTransactionJob implements ShouldQueue
                     $result['raw'] ?? $result
                 );
 
-                CheckTransactionStatusJob::dispatch($tx)->delay(now()->addSeconds(10));
+                // Polling logic per user request (Point 3):
+                // Jika supplier memiliki callback/webhook, tunggu callback (tanpa aggressive auto-poll).
+                // Jika supplier TIDAK memiliki callback, lakukan polling otomatis dimulai pada detik ke-2!
+                if (! $supplier?->supportsCallback()) {
+                    CheckTransactionStatusJob::dispatch($tx)->delay(now()->addSeconds(2));
+                }
             } else {
+                $upstreamRc = $result['code'] ?? $result['response_code'] ?? $result['rc'] ?? null;
+                $resolvedError = app(\App\Domain\Ppob\Services\ProviderErrorMappingService::class)->resolve(
+                    $supplier,
+                    $upstreamRc,
+                    $result['message'] ?? 'Provider error'
+                );
+
                 $transactionService->failAndRefund(
                     $tx,
-                    $result['message'] ?? 'Provider error',
-                    $result['raw'] ?? $result
+                    $resolvedError['message'],
+                    is_array($result['raw'] ?? null)
+                        ? array_merge($result['raw'], ['internal_error_code' => $resolvedError['internal_code'], 'upstream_rc' => $upstreamRc])
+                        : ['raw' => $result, 'internal_error_code' => $resolvedError['internal_code'], 'upstream_rc' => $upstreamRc]
                 );
             }
         } catch (\Throwable $e) {

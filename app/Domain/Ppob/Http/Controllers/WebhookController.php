@@ -127,4 +127,38 @@ class WebhookController extends ApiController
 
         return ApiResponse::success(new TopupResource($topup), 'Callback berhasil diproses');
     }
+
+    public function providerCallback(Request $request, string $slug): JsonResponse
+    {
+        /** @var \App\Domain\Product\Models\Provider|null $provider */
+        $provider = \App\Domain\Product\Models\Provider::where('callback_slug', $slug)
+            ->orWhere('code', $slug)
+            ->first();
+
+        if (! $provider) {
+            return ApiResponse::error(
+                'PROVIDER_NOT_FOUND',
+                "Endpoint callback untuk provider [{$slug}] tidak ditemukan.",
+                404
+            );
+        }
+
+        if (! $provider->is_active) {
+            return ApiResponse::error(
+                'PROVIDER_INACTIVE',
+                "Provider [{$provider->name}] sedang nonaktif.",
+                403
+            );
+        }
+
+        // Jika driver memiliki custom webhook handler
+        $driverClass = $provider->driver;
+        if (class_exists($driverClass) && method_exists($driverClass, 'handleWebhook')) {
+            return app($driverClass)->handleWebhook($request, $provider);
+        }
+
+        // Generic PPOB webhook processing: injeksikan provider source
+        $request->merge(['source' => $provider->code, 'provider' => $provider->code]);
+        return $this->ppobCallback($request);
+    }
 }

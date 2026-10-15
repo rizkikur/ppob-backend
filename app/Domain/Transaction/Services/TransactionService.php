@@ -96,7 +96,7 @@ class TransactionService
         }
 
         // Resolusi supplier & failover routing (ADR-004 & ADR-005)
-        $resolvedRoute = $this->getRoutingService()->resolve($product);
+        $resolvedRoute = $this->getRoutingService()->resolve($product, null, $sellPrice);
 
         return DB::transaction(function () use ($user, $product, $customerNumber, $inquiry, $amount, $sellPrice, $resolvedRoute) {
             // Debit saldo via WalletService (bukan langsung update model Wallet)
@@ -189,7 +189,7 @@ class TransactionService
         }
 
         // Resolusi supplier & failover routing berdasarkan aturan partner (ADR-004 & ADR-005)
-        $resolvedRoute = $this->getRoutingService()->resolve($product, $partner);
+        $resolvedRoute = $this->getRoutingService()->resolve($product, $partner, $sellPrice);
 
         return DB::transaction(function () use ($partner, $partnerUser, $product, $customerNumber, $inquiry, $amount, $sellPrice, $resolvedRoute) {
             // Debit saldo deposit partner via WalletService
