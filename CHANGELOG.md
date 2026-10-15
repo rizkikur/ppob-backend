@@ -7,6 +7,41 @@ Format mengikuti panduan [Keep a Changelog](https://keepachangelog.com/id/1.0.0/
 
 ## [Unreleased]
 
+### Modul 1 — Vendor / Supplier Gateway & Standard Error Mapping (2026-10-15)
+- **Added**:
+  - Model `ProviderErrorMapping`, `ProviderProduct`, dan relasi `Provider`.
+  - Migrasi `2026_10_15_000002_create_provider_enhancements_and_error_mappings`.
+  - Service `ProviderErrorMappingService` dengan 9 kode standar transaksi terpadu (`00`, `06`, `07`, `13`, `14`, `17`, `68`, `91`, `99`).
+  - Integrasi error mapping ke `ProcessTransactionJob` dan `CheckTransactionStatusJob`.
+  - Routing dinamis webhook upstream: `POST /api/callback/{slug}` dan `/callback/{slug}`.
+  - UI Vendor Detail dengan 4 Tab: Gateway Credentials, Upstream Catalog, Error Mapping, dan Circuit Breaker.
+  - Test suite `AdminProviderEnhancementAndErrorMappingTest` (8 tests passed).
+
+### Modul 2 — Master Operator & Multi-Provider SKU Routing (2026-10-15)
+- **Added**:
+  - Entity `Operator` (`operators`), migrasi `2026_10_15_000003_create_operators_and_enhance_product_routing`.
+  - Prefix rules parser dan metode `Operator::detectByDestinationNumber($phone)` untuk normalisasi format lokal dan internasional (+62/62/0).
+  - Multi-Supplier SKU routing pada `product_supplier_routes`: kolom `supplier_sku`, `cost_cents`, dan resolusi otomatis pada `ResolvedRoute` & `SupplierRoutingService`.
+  - Live Prefix Tester interaktif dan CRUD Master Operator di Admin Web (`/office/operators`).
+  - Filter Operator pada daftar produk serta integrasi dropdown operator pada form produk.
+  - Test suite `AdminOperatorManagementTest` (7 tests passed).
+
+### Modul 3 — Mitra B2B Webhook Ping & Pengguna Mobile Apps Management (2026-10-15)
+- **Added**:
+  - **Mitra B2B Enhancements**:
+    - Fitur Test Ping Webhook (`POST /office/partners/{partner}/webhooks/ping`) dengan verifikasi tanda tangan kriptografis HMAC-SHA256 (`X-Callback-Signature`) dan pencatatan log `webhook_deliveries`.
+    - Kemampuan mencabut/menghapus override harga khusus produk per mitra (`DELETE /office/partners/{partner}/pricing/{product}`).
+  - **Pengguna Mobile Apps (Retail / Agen)**:
+    - Service `AdminUserManagementService` dan Controller `AdminUserController` di `/office/users`.
+    - Halaman Index Pengguna Mobile Apps dengan filter pencarian fleksibel, filter tier level, status KYC, status akun, dan ringkasan kartu KPI saldo & pengguna.
+    - Halaman Detail Pengguna Mobile Apps (`/office/users/{user}`) dengan kartu profil, tombol cepat WhatsApp (`https://wa.me/`), saldo dompet, 15 riwayat mutasi saldo, dan 15 transaksi PPOB terakhir.
+    - Aksi administratif lengkap: Suspend / Aktifkan akun, Verifikasi KYC / Cabut KYC, Reset PIN transaksi, Ubah level tier harga, dan Penyesuaian saldo manual (Credit/Debit via `WalletService`).
+    - Menu sidebar "Pengguna Mobile" pada grup navigasi admin.
+  - **Automated Tests**:
+    - `AdminPartnerWebhookPingAndPricingTest` (3 tests passed).
+    - `AdminUserManagementTest` (9 tests passed).
+    - Seluruh 147 test suite admin dan 37 test suite PPOB 100% lulus.
+
 ## [v1.0.0] - 2026-10-14
 ### Phase 10 — Web Admin Backoffice Panel (Ready to Live)
 - **Added**:

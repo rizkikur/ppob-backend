@@ -223,6 +223,21 @@ Dependensi: Phase 1, Phase 3 (WalletService), Phase 7 (CircuitBreakerService), P
 
 ---
 
+### Phase 11 — Ekosistem Routing, Multi-Provider & Manajemen Pengguna (2026-10-15)
+
+Dependensi: Phase 10
+
+| No   | Item                                                    | Status       | Catatan                                                              |
+|------|---------------------------------------------------------|--------------|----------------------------------------------------------------------|
+| 11.1 | Model & UI: `ProviderErrorMapping`, `ProviderProduct`, dynamic webhook callback (`/api/callback/{slug}`) | ✅ Selesai | 9 kode standar transaksi, routing dinamis per vendor slug (2026-10-15) |
+| 11.2 | Model & UI: Master `Operator` + Deteksi Prefix Nomor HP | ✅ Selesai   | `Operator::detectByDestinationNumber()`, Live Prefix Tester UI (2026-10-15) |
+| 11.3 | Multi-Supplier SKU Mapping (`product_supplier_routes.supplier_sku`) | ✅ Selesai | Resolusi otomatis upstream SKU di `ResolvedRoute` & `SupplierRoutingService` (2026-10-15) |
+| 11.4 | Mitra B2B: Webhook Ping Test (HMAC SHA-256) & Delete Override Pricing | ✅ Selesai | Test ping endpoint mitra & tombol hapus harga override (2026-10-15) |
+| 11.5 | Pengguna Mobile Apps: Management View, Filter, KYC, Suspend, Reset PIN, Saldo | ✅ Selesai | `/office/users` (Index & Show), WalletService credit/debit, WhatsApp link (2026-10-15) |
+| 11.6 | Feature Tests Ekosistem Baru                            | ✅ Selesai   | Test suites Provider, Operator, Partner Ping, dan User Management 100% lulus (2026-10-15) |
+
+---
+
 ## Dependensi Antar Phase
 
 ```
