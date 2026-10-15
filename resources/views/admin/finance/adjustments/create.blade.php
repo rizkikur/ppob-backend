@@ -44,7 +44,7 @@
                 <option value="">-- Pilih Akun Penerima Penyesuaian Saldo --</option>
                 @foreach($users as $u)
                     <option value="{{ $u->id }}" {{ (old('user_id') == $u->id || ($selectedUser && $selectedUser->id == $u->id)) ? 'selected' : '' }}>
-                        {{ $u->name }} ({{ $u->email ?: $u->phone }}) &bull; Saldo Saat Ini: Rp {{ number_format(($u->wallet?->balance_cents ?? 0) / 100, 0, ',', '.') }}
+                        {{ $u->name }} ({{ $u->email ?: $u->phone }}) &bull; Saldo Saat Ini: {{ $u->wallet ? $u->wallet->balance()->format() : 'Rp 0' }}
                     </option>
                 @endforeach
             </select>

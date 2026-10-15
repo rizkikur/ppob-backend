@@ -12,6 +12,7 @@ use App\Domain\Admin\Http\Controllers\Partner\AdminPartnerController;
 use App\Domain\Admin\Http\Controllers\Partner\AdminPartnerSecurityController;
 use App\Domain\Admin\Http\Controllers\Partner\AdminPartnerWebhookController;
 use App\Domain\Admin\Http\Controllers\Product\AdminCategoryController;
+use App\Domain\Admin\Http\Controllers\Product\AdminOperatorController;
 use App\Domain\Admin\Http\Controllers\Product\AdminProductController;
 use App\Domain\Admin\Http\Controllers\Product\AdminProductPriceController;
 use App\Domain\Admin\Http\Controllers\Profile\AdminProfileController;
@@ -22,6 +23,7 @@ use App\Domain\Admin\Http\Controllers\Security\ConfirmPasswordController;
 use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionController;
 use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionRefundController;
 use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionRequeryController;
+use App\Domain\Admin\Http\Controllers\User\AdminUserController;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Route;
 
@@ -79,8 +81,10 @@ $adminRoute->group(function () {
                 ->name('webhook.retry');
         });
 
-        // Products & Categories Catalog Management
+        // Products & Categories & Operators Catalog Management
         Route::resource('categories', AdminCategoryController::class)->except(['show', 'create', 'edit']);
+        Route::post('operators/detect', [AdminOperatorController::class, 'detect'])->name('operators.detect');
+        Route::resource('operators', AdminOperatorController::class)->except(['show', 'create', 'edit']);
         Route::post('products/sync-provider', [AdminProductController::class, 'syncPricelist'])->name('products.sync');
         Route::post('products/bulk/status', [AdminProductController::class, 'bulkStatus'])->name('products.bulk.status');
         Route::post('products/bulk/prices', [AdminProductPriceController::class, 'bulkUpdatePrices'])->name('products.bulk.prices');
@@ -94,7 +98,12 @@ $adminRoute->group(function () {
         Route::prefix('providers')->name('providers.')->group(function () {
             Route::get('/', [AdminProviderController::class, 'index'])->name('index');
             Route::get('/{provider}', [AdminProviderController::class, 'show'])->name('show');
+            Route::put('/{provider}', [AdminProviderController::class, 'update'])->name('update');
             Route::post('/{provider}/ping', [AdminProviderController::class, 'ping'])->name('ping');
+            Route::post('/{provider}/check-balance', [AdminProviderController::class, 'checkBalance'])->name('check_balance');
+            Route::post('/{provider}/sync-products', [AdminProviderController::class, 'syncUpstreamProducts'])->name('sync_products');
+            Route::post('/{provider}/error-mappings', [AdminProviderController::class, 'storeErrorMapping'])->name('error_mappings.store');
+            Route::delete('/{provider}/error-mappings/{mapping}', [AdminProviderController::class, 'destroyErrorMapping'])->name('error_mappings.destroy');
             Route::post('/{provider}/toggle', [AdminProviderController::class, 'toggleStatus'])->name('toggle');
             Route::post('/{provider}/circuit-breaker/reset', [AdminCircuitBreakerController::class, 'reset'])
                 ->name('circuit_breaker.reset');
@@ -115,6 +124,7 @@ $adminRoute->group(function () {
             Route::post('/{partner}/toggle', [AdminPartnerController::class, 'toggleStatus'])->name('toggle');
             Route::post('/{partner}/adjust-balance', [AdminPartnerController::class, 'adjustBalance'])->name('adjust_balance');
             Route::post('/{partner}/pricing', [AdminPartnerController::class, 'updatePricing'])->name('pricing.update');
+            Route::delete('/{partner}/pricing/{product}', [AdminPartnerController::class, 'destroyPricing'])->name('pricing.destroy');
 
             // Security & Credentials (Password Confirmation required for rotation)
             Route::middleware(['password.confirm:admin.password.confirm'])->group(function () {
@@ -130,9 +140,28 @@ $adminRoute->group(function () {
             Route::delete('/{partner}/ip-whitelist/{ip}', [AdminPartnerSecurityController::class, 'removeIp'])
                 ->name('ip.destroy');
 
-            // Webhook Retry
+            // Webhook Ping Test & Retry
+            Route::post('/{partner}/webhooks/ping', [AdminPartnerWebhookController::class, 'ping'])
+                ->name('webhooks.ping');
             Route::post('/webhooks/{delivery}/retry', [AdminPartnerWebhookController::class, 'retry'])
                 ->name('webhooks.retry');
+
+            // Partner Routing & Failover Rules (ADR-004)
+            Route::post('/{partner}/routing-rules', [AdminPartnerController::class, 'storeRoutingRule'])
+                ->name('routing_rules.store');
+            Route::delete('/{partner}/routing-rules/{rule}', [AdminPartnerController::class, 'destroyRoutingRule'])
+                ->name('routing_rules.destroy');
+        });
+
+        // Mobile App Users Management (B2C / Agen Retail)
+        Route::prefix('users')->name('users.')->group(function () {
+            Route::get('/', [AdminUserController::class, 'index'])->name('index');
+            Route::get('/{user}', [AdminUserController::class, 'show'])->name('show');
+            Route::post('/{user}/toggle', [AdminUserController::class, 'toggleStatus'])->name('toggle');
+            Route::post('/{user}/toggle-kyc', [AdminUserController::class, 'toggleKyc'])->name('toggle_kyc');
+            Route::post('/{user}/tier', [AdminUserController::class, 'updateTier'])->name('tier.update');
+            Route::post('/{user}/reset-pin', [AdminUserController::class, 'resetPin'])->name('reset_pin');
+            Route::post('/{user}/adjust-balance', [AdminUserController::class, 'adjustBalance'])->name('adjust_balance');
         });
 
         // Finance, Topup Approvals, Double-Entry Ledger, & Reconciliation (Finance & Super Admin only)
