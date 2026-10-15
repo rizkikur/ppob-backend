@@ -63,6 +63,13 @@
                     <span>Kategori</span>
                 </a>
 
+                {{-- Manage Operators --}}
+                <a href="{{ route('admin.operators.index') }}"
+                   class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-800/80 hover:bg-slate-700/80 border border-slate-700/60 text-indigo-300 hover:text-white text-xs font-semibold transition-all">
+                    <svg class="w-4 h-4 text-indigo-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/></svg>
+                    <span>Operator / Brand</span>
+                </a>
+
                 {{-- Create Product --}}
                 <a href="{{ route('admin.products.create') }}"
                    class="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all">
@@ -74,7 +81,7 @@
 
         {{-- Filter Bar --}}
         <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/60 p-4 sm:p-5 shadow-xl">
-            <form method="GET" action="{{ route('admin.products.index') }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+            <form method="GET" action="{{ route('admin.products.index') }}" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3.5">
                 {{-- Search --}}
                 <div class="lg:col-span-2">
                     <label for="q" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Pencarian</label>
@@ -106,6 +113,21 @@
                     </select>
                 </div>
 
+                {{-- Operator Filter --}}
+                <div>
+                    <label for="operator_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Operator</label>
+                    <select id="operator_id"
+                            name="operator_id"
+                            class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
+                        <option value="">Semua Operator</option>
+                        @foreach($operators as $op)
+                            <option value="{{ $op->id }}" @selected((string)request('operator_id', $filters['operator_id'] ?? '') === (string)$op->id)>
+                                {{ $op->name }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+
                 {{-- Provider Filter --}}
                 <div>
                     <label for="provider_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">Provider</label>
@@ -127,7 +149,7 @@
                             class="w-full px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-xl shadow-lg shadow-indigo-600/30 transition-all">
                         Terapkan
                     </button>
-                    @if(request()->hasAny(['q', 'category_id', 'provider_id', 'is_active', 'product_type']))
+                    @if(request()->hasAny(['q', 'category_id', 'operator_id', 'provider_id', 'is_active', 'product_type']))
                         <a href="{{ route('admin.products.index') }}"
                            class="px-3 py-2 text-xs font-semibold text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-all"
                            title="Reset Filter">
@@ -157,7 +179,14 @@
                         @forelse($products as $prod)
                             <tr class="hover:bg-slate-700/30 transition-colors">
                                 <td class="py-3.5 px-4">
-                                    <div class="font-mono text-xs font-bold text-indigo-400">{{ $prod->sku_code }}</div>
+                                    <div class="flex items-center gap-1.5 mb-0.5">
+                                        <span class="font-mono text-xs font-bold text-indigo-400">{{ $prod->sku_code }}</span>
+                                        @if($prod->operator)
+                                            <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-slate-700/80 text-slate-300 border border-slate-600/50">
+                                                {{ $prod->operator->name }}
+                                            </span>
+                                        @endif
+                                    </div>
                                     <div class="font-medium text-slate-200 text-xs">{{ $prod->name }}</div>
                                 </td>
                                 <td class="py-3.5 px-4 text-xs text-slate-300">

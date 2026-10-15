@@ -74,6 +74,21 @@
                         </select>
                     </div>
 
+                    {{-- Operator / Brand --}}
+                    <div>
+                        <label for="operator_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                            Operator / Brand
+                        </label>
+                        <select id="operator_id"
+                                name="operator_id"
+                                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
+                            <option value="">-- Pilih Operator / Brand (Opsional) --</option>
+                            @foreach($operators as $op)
+                                <option value="{{ $op->id }}" @selected(old('operator_id') == $op->id)>{{ $op->name }} ({{ $op->code }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     {{-- Provider --}}
                     <div>
                         <label for="provider_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
