@@ -10,11 +10,6 @@
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet" />
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" nonce="{{ $csp_nonce ?? '' }}"></script>
-    <!-- Chart.js CDN -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="{{ $csp_nonce ?? '' }}"></script>
 </head>
 <body class="h-full font-sans antialiased bg-slate-950" x-data="{ sidebarOpen: false }">
     {{-- Top Slim Progress Bar for Instant Seamless Navigation --}}

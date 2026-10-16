@@ -10,9 +10,6 @@
     <link href="https://fonts.bunny.net/css?family=instrument-sans:400,500,600,700" rel="stylesheet" />
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-
-    <!-- Alpine.js -->
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js" nonce="{{ $csp_nonce ?? '' }}"></script>
 </head>
 <body class="h-full font-sans antialiased text-slate-100 bg-radial from-slate-900 to-slate-950 min-h-screen flex flex-col justify-center items-center py-12 sm:px-6 lg:px-8">
     <div class="sm:mx-auto sm:w-full sm:max-w-md text-center">
