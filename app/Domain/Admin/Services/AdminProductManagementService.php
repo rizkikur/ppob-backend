@@ -25,13 +25,25 @@ class AdminProductManagementService
      */
     public function filterProducts(array $filters): LengthAwarePaginator
     {
-        $query = Product::query()->with([
-            'category',
-            'operator',
-            'provider',
-            'tierPrices.userTier',
-            'supplierRoutes.provider',
-        ]);
+        $query = Product::query()
+            ->select([
+                'id',
+                'provider_id',
+                'category_id',
+                'operator_id',
+                'sku_code',
+                'name',
+                'product_type',
+                'base_price_cents',
+                'admin_fee_cents',
+                'is_active',
+                'created_at',
+            ])
+            ->with([
+                'category' => fn ($q) => $q->select(['id', 'name', 'slug']),
+                'operator' => fn ($q) => $q->select(['id', 'name', 'code']),
+                'provider' => fn ($q) => $q->select(['id', 'name']),
+            ]);
 
         if (! empty($filters['q'])) {
             $q = trim($filters['q']);

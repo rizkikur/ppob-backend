@@ -36,7 +36,23 @@ class AdminPartnerManagementService
     public function getPartnersWithMetrics(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = Partner::query()
-            ->with(['user.wallet'])
+            ->select([
+                'id',
+                'user_id',
+                'name',
+                'code',
+                'api_key',
+                'protocol',
+                'response_mode',
+                'rate_limit_rpm',
+                'ip_whitelist',
+                'is_active',
+                'created_at',
+            ])
+            ->with([
+                'user' => fn ($q) => $q->select(['id', 'name', 'email']),
+                'user.wallet' => fn ($q) => $q->select(['id', 'user_id', 'balance_cents']),
+            ])
             ->withCount(['logs', 'webhookDeliveries', 'productPrices']);
 
         if (! empty($filters['search'])) {

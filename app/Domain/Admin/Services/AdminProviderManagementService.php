@@ -26,6 +26,19 @@ class AdminProviderManagementService
     public function getProvidersWithCircuitStatus(): Collection
     {
         $providers = Provider::query()
+            ->select([
+                'id',
+                'name',
+                'code',
+                'driver',
+                'queue_name',
+                'max_workers',
+                'priority',
+                'is_active',
+                'supports_balance_api',
+                'balance_alert_threshold_cents',
+                'updated_at',
+            ])
             ->withCount(['products', 'supplierRoutes'])
             ->orderBy('priority', 'asc')
             ->orderBy('name', 'asc')

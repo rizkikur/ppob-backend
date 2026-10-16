@@ -34,15 +34,38 @@ class AdminTransactionManagementService
      */
     public function buildQuery(array $filters)
     {
-        $query = Transaction::query()->with([
-            'user.userTier',
-            'product.provider',
-            'product.category',
-            'partner',
-            'supplier',
-            'originalSupplier',
-            'inquiry',
-        ]);
+        $query = Transaction::query()
+            ->select([
+                'id',
+                'user_id',
+                'product_id',
+                'partner_id',
+                'supplier_id',
+                'original_supplier_id',
+                'inquiry_id',
+                'customer_number',
+                'amount_cents',
+                'sell_price_cents',
+                'status',
+                'idempotency_key',
+                'provider_ref',
+                'provider_response',
+                'failure_reason',
+                'is_failover',
+                'created_at',
+                'updated_at',
+            ])
+            ->with([
+                'user' => fn ($q) => $q->select(['id', 'name', 'phone', 'user_tier_id']),
+                'user.userTier' => fn ($q) => $q->select(['id', 'name', 'label']),
+                'product' => fn ($q) => $q->select(['id', 'category_id', 'provider_id', 'operator_id', 'name', 'sku_code', 'base_price_cents']),
+                'product.provider' => fn ($q) => $q->select(['id', 'name']),
+                'product.category' => fn ($q) => $q->select(['id', 'name', 'slug']),
+                'partner' => fn ($q) => $q->select(['id', 'name', 'code']),
+                'supplier' => fn ($q) => $q->select(['id', 'name']),
+                'originalSupplier' => fn ($q) => $q->select(['id', 'name']),
+                'inquiry' => fn ($q) => $q->select(['id', 'customer_number']),
+            ]);
 
         // Search Keyword (ID, customer number, provider ref, idempotency key)
         if (! empty($filters['q'])) {

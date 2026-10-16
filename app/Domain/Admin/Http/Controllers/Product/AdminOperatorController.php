@@ -25,7 +25,20 @@ class AdminOperatorController extends Controller
      */
     public function index(Request $request): View
     {
-        $query = Operator::query()->with('category')->withCount('products');
+        $query = Operator::query()
+            ->select([
+                'id',
+                'category_id',
+                'name',
+                'code',
+                'icon_url',
+                'prefix_rules',
+                'sort_order',
+                'is_active',
+                'created_at',
+            ])
+            ->with(['category' => fn ($q) => $q->select(['id', 'name', 'slug'])])
+            ->withCount('products');
 
         if ($request->filled('search')) {
             $search = $request->input('search');
@@ -44,7 +57,7 @@ class AdminOperatorController extends Controller
             ->paginate(15)
             ->withQueryString();
 
-        $categories = ProductCategory::orderBy('name')->get();
+        $categories = ProductCategory::query()->select(['id', 'name'])->orderBy('name')->get();
 
         return view('admin.products.operators.index', [
             'operators' => $operators,

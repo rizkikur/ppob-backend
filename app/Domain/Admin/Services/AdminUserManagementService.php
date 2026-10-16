@@ -27,12 +27,26 @@ class AdminUserManagementService
     public function getUsersWithMetrics(array $filters, int $perPage = 15): LengthAwarePaginator
     {
         $query = User::query()
+            ->select([
+                'id',
+                'user_tier_id',
+                'name',
+                'phone',
+                'email',
+                'role',
+                'is_active',
+                'is_verified',
+                'created_at',
+            ])
             ->where('role', 'user')
             ->where(function ($q) {
                 $q->whereNull('email')
                     ->orWhere('email', 'not like', '%@partner.internal');
             })
-            ->with(['tier', 'wallet'])
+            ->with([
+                'tier' => fn ($q) => $q->select(['id', 'name', 'label']),
+                'wallet' => fn ($q) => $q->select(['id', 'user_id', 'balance_cents']),
+            ])
             ->withCount('transactions');
 
         if (! empty($filters['search'])) {
@@ -77,8 +91,13 @@ class AdminUserManagementService
         $activeUsers = (clone $baseQuery)->where('is_active', true)->count();
         $verifiedUsers = (clone $baseQuery)->where('is_verified', true)->count();
 
-        $userIds = (clone $baseQuery)->pluck('id');
-        $totalBalanceCents = (int) Wallet::whereIn('user_id', $userIds)->sum('balance_cents');
+        $totalBalanceCents = (int) Wallet::whereHas('user', function ($q) {
+            $q->where('role', 'user')
+                ->where(function ($sub) {
+                    $sub->whereNull('email')
+                        ->orWhere('email', 'not like', '%@partner.internal');
+                });
+        })->sum('balance_cents');
 
         return [
             'total_users' => $totalUsers,
