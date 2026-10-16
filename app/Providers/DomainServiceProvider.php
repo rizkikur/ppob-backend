@@ -66,6 +66,7 @@ class DomainServiceProvider extends ServiceProvider
         $this->app->singleton(InquiryService::class);
         $this->app->singleton(TransactionService::class);
         $this->app->singleton(\App\Domain\Transaction\Services\TransactionMetricService::class);
+        $this->app->singleton(\App\Domain\Shared\Services\OperationalAlertService::class);
     }
 
     public function boot(): void
@@ -85,6 +86,7 @@ class DomainServiceProvider extends ServiceProvider
                 RetryFailedWebhooksCommand::class,
                 \App\Domain\Transaction\Commands\AggregateDailyTransactionMetricsCommand::class,
                 \App\Domain\Admin\Commands\CleanupExportsCommand::class,
+                \App\Domain\Shared\Commands\TestOperationalAlertCommand::class,
             ]);
         }
     }

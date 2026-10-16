@@ -135,4 +135,28 @@ return [
         'default_user_failover_policy' => env('PPOB_ROUTING_DEFAULT_POLICY', 'same_category'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Operational Bot & Webhook Alert Configuration
+    |--------------------------------------------------------------------------
+    | Pengaturan notifikasi bot Telegram/Discord saat terjadi anomali sistem:
+    | - Circuit Breaker Tripped (OPEN)
+    | - Saldo Provider Menipis (< Threshold)
+    | - Semua Rute Failover Habis / Gagal
+    */
+    'alerts' => [
+        'enabled' => env('OPERATIONAL_ALERTS_ENABLED', true),
+        'channel' => env('OPERATIONAL_ALERTS_CHANNEL', 'log'), // 'telegram' | 'webhook' | 'log'
+        'cooldown_seconds' => (int) env('OPERATIONAL_ALERTS_COOLDOWN', 300), // 5 menit anti-spam throttle
+
+        'telegram' => [
+            'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+            'chat_id' => env('TELEGRAM_CHAT_ID'),
+        ],
+
+        'webhook' => [
+            'url' => env('ALERT_WEBHOOK_URL'),
+        ],
+    ],
+
 ];

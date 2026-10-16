@@ -58,9 +58,19 @@ class CircuitBreakerService
      */
     public function recordSuccess(string $supplierCode): void
     {
+        $prevState = $this->getState($supplierCode);
+
         Cache::forget($this->failuresKey($supplierCode));
         Cache::forget($this->openedAtKey($supplierCode));
         $this->setState($supplierCode, self::STATE_CLOSED);
+
+        if (in_array($prevState, [self::STATE_OPEN, self::STATE_HALF_OPEN], true)) {
+            try {
+                app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyCircuitBreakerRecovered($supplierCode);
+            } catch (\Throwable) {
+                // Ignore alert failures to preserve core transaction flow
+            }
+        }
     }
 
     /**
@@ -92,6 +102,14 @@ class CircuitBreakerService
     {
         $this->setState($supplierCode, self::STATE_OPEN);
         Cache::put($this->openedAtKey($supplierCode), now()->timestamp, $this->cooldownSeconds * 2);
+
+        $failures = (int) Cache::get($this->failuresKey($supplierCode), 0);
+
+        try {
+            app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyCircuitBreakerTripped($supplierCode, $failures);
+        } catch (\Throwable) {
+            // Ignore alert failures to preserve core transaction flow
+        }
     }
 
     /**

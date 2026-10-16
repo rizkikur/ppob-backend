@@ -94,6 +94,15 @@ class SupplierRoutingService
         // Guard 1: Toggle per-produk (Point 1 user request)
         // Guard 2: Kebijakan klien / mitra (ADR-004)
         if ($product->allow_failover === false || ! $allowFailover || $failoverPolicy === PartnerRoutingRule::POLICY_NONE) {
+            try {
+                app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyRoutingExhausted(
+                    $product->sku_code,
+                    $product->name,
+                    $preferredProvider->name,
+                    'Failover dinonaktifkan oleh kebijakan produk atau preferensi klien.'
+                );
+            } catch (\Throwable) {}
+
             throw BusinessException::providerUnavailable($preferredProvider->name);
         }
 
@@ -101,6 +110,15 @@ class SupplierRoutingService
         $backupProvider = $this->resolveBackupProvider($product, $candidates, $preferredProvider, $failoverPolicy, $maxAllowedCost);
 
         if (! $backupProvider) {
+            try {
+                app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyRoutingExhausted(
+                    $product->sku_code,
+                    $product->name,
+                    $preferredProvider->name,
+                    'Seluruh supplier cadangan/failover tidak tersedia atau biaya melebihi harga jual.'
+                );
+            } catch (\Throwable) {}
+
             throw BusinessException::providerUnavailable($preferredProvider->name);
         }
 
