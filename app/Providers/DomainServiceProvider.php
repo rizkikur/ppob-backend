@@ -84,6 +84,7 @@ class DomainServiceProvider extends ServiceProvider
                 CheckProviderHealthCommand::class,
                 RetryFailedWebhooksCommand::class,
                 \App\Domain\Transaction\Commands\AggregateDailyTransactionMetricsCommand::class,
+                \App\Domain\Admin\Commands\CleanupExportsCommand::class,
             ]);
         }
     }

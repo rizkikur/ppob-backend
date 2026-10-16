@@ -21,6 +21,7 @@ use App\Domain\Admin\Http\Controllers\Provider\AdminProviderController;
 use App\Domain\Admin\Http\Controllers\Provider\AdminRoutingPriorityController;
 use App\Domain\Admin\Http\Controllers\Security\ConfirmPasswordController;
 use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionController;
+use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionExportController;
 use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionRefundController;
 use App\Domain\Admin\Http\Controllers\Transaction\AdminTransactionRequeryController;
 use App\Domain\Admin\Http\Controllers\User\AdminUserController;
@@ -71,6 +72,13 @@ $adminRoute->group(function () {
         // Transactions Management & Manual Interventions
         Route::prefix('transactions')->name('transactions.')->group(function () {
             Route::get('/', [AdminTransactionController::class, 'index'])->name('index');
+
+            // Asynchronous CSV Export & Tracking
+            Route::post('/export/async', [AdminTransactionExportController::class, 'store'])->name('export.async');
+            Route::get('/export/status/{job}', [AdminTransactionExportController::class, 'status'])->name('export.status');
+            Route::get('/export/download/{job}', [AdminTransactionExportController::class, 'download'])->name('export.download');
+            Route::get('/export/recent', [AdminTransactionExportController::class, 'recent'])->name('export.recent');
+
             Route::get('/{transaction}', [AdminTransactionController::class, 'show'])->name('show');
             Route::post('/{transaction}/requery', [AdminTransactionRequeryController::class, 'requery'])->name('requery');
             Route::post('/{transaction}/override-status', [AdminTransactionController::class, 'overrideStatus'])->name('override');

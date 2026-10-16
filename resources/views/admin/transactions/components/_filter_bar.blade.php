@@ -36,7 +36,7 @@
             this.dateEnd = '';
         }
      }"
-     class="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-5 shadow-xl">
+     class="relative z-30 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-5 shadow-xl">
     <form data-filter-form method="GET" action="{{ route('admin.transactions.index') }}" @submit.prevent="applyFilter($event)" class="space-y-4">
         {{-- Row 1: Search & Primary Dropdowns in Flexible Row --}}
         <div class="flex flex-col lg:flex-row gap-3.5 items-stretch lg:items-end">
@@ -173,13 +173,48 @@
                     Reset Filter
                 </button>
 
-                {{-- Export CSV Button --}}
-                <button type="button"
-                        @click="exportCsv('{{ route('admin.transactions.index') }}')"
-                        class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
-                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>CSV</span>
-                </button>
+                {{-- Export CSV Dropdown Menu --}}
+                <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                    <button type="button"
+                            @click="open = !open"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
+                        <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <span>Export CSV</span>
+                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div x-show="open" x-cloak
+                         class="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl py-2 z-50">
+                        <div class="px-3.5 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                            Pilihan Unduhan CSV
+                        </div>
+                        <button type="button"
+                                @click="open = false; startAsyncExport()"
+                                class="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-start gap-2.5 transition-colors">
+                            <svg class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <div>
+                                <span class="font-semibold block text-slate-100">Export Latar Belakang (Async)</span>
+                                <span class="text-[11px] text-slate-400">Rekomendasi untuk ribuan baris, anti-timeout dengan progress bar live.</span>
+                            </div>
+                        </button>
+                        <button type="button"
+                                @click="open = false; exportCsv('{{ route('admin.transactions.index') }}')"
+                                class="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-start gap-2.5 transition-colors">
+                            <svg class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            <div>
+                                <span class="font-semibold block text-slate-100">Export Langsung (Sinkron)</span>
+                                <span class="text-[11px] text-slate-400">Unduh langsung untuk data sedikit (&lt; 500 baris).</span>
+                            </div>
+                        </button>
+                        <div class="border-t border-slate-800 my-1"></div>
+                        <button type="button"
+                                @click="open = false; fetchRecentExports()"
+                                class="w-full text-left px-3.5 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition-colors">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span>Riwayat Unduhan Export</span>
+                        </button>
+                    </div>
+                </div>
 
                 {{-- Apply Filter Button --}}
                 <button type="submit"
