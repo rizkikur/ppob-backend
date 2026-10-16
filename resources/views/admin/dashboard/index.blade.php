@@ -51,6 +51,17 @@
                 init() {
                     this.initChart();
                     this.startPolling();
+
+                    window.addEventListener('seamless:before-swap', () => {
+                        if (this.timer) {
+                            clearInterval(this.timer);
+                            this.timer = null;
+                        }
+                        if (this.chartInstance) {
+                            try { this.chartInstance.destroy(); } catch (e) {}
+                            this.chartInstance = null;
+                        }
+                    }, { once: true });
                 },
 
                 startPolling() {

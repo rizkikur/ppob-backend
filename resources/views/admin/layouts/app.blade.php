@@ -17,6 +17,9 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" nonce="{{ $csp_nonce ?? '' }}"></script>
 </head>
 <body class="h-full font-sans antialiased bg-slate-950" x-data="{ sidebarOpen: false }">
+    {{-- Top Slim Progress Bar for Instant Seamless Navigation --}}
+    <div id="seamless-progress-bar" class="fixed top-0 left-0 h-0.5 bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 z-[99999] transition-all duration-200 pointer-events-none opacity-0 w-0"></div>
+
     <div class="min-h-full flex flex-col lg:flex-row">
         {{-- Mobile Sidebar Backdrop --}}
         <div x-show="sidebarOpen" x-cloak class="fixed inset-0 z-40 bg-slate-950/80 backdrop-blur-sm lg:hidden" @click="sidebarOpen = false"></div>
@@ -186,7 +189,7 @@
             </header>
 
             {{-- Main Body --}}
-            <main class="flex-1 p-4 sm:p-6 lg:p-8">
+            <main id="admin-main-content" class="flex-1 p-4 sm:p-6 lg:p-8 transition-opacity duration-150">
                 {{-- Flash Notifications --}}
                 @if (session('success'))
                     <div class="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center justify-between">
@@ -211,5 +214,238 @@
             </main>
         </div>
     </div>
+
+    {{-- Seamless Main-Content Navigation & Pre-fetch on Hover Engine --}}
+    <script nonce="{{ $csp_nonce ?? '' }}">
+        (function () {
+            const progressBar = document.getElementById('seamless-progress-bar');
+            const prefetchCache = new Map();
+            let hoverTimeout = null;
+            let progressTimer = null;
+
+            function startProgress() {
+                if (!progressBar) return;
+                progressBar.style.opacity = '1';
+                progressBar.style.width = '25%';
+                clearInterval(progressTimer);
+                progressTimer = setInterval(() => {
+                    const currentWidth = parseFloat(progressBar.style.width) || 25;
+                    if (currentWidth < 85) {
+                        progressBar.style.width = (currentWidth + Math.random() * 15) + '%';
+                    }
+                }, 150);
+            }
+
+            function endProgress() {
+                if (!progressBar) return;
+                clearInterval(progressTimer);
+                progressBar.style.width = '100%';
+                setTimeout(() => {
+                    progressBar.style.opacity = '0';
+                    setTimeout(() => {
+                        progressBar.style.width = '0%';
+                    }, 200);
+                }, 100);
+            }
+
+            function isInternalAdminLink(a) {
+                if (!a || !a.href) return false;
+                if (a.target && a.target !== '_self') return false;
+                if (a.hasAttribute('download')) return false;
+                if (a.hasAttribute('data-no-seamless')) return false;
+                if (a.getAttribute('href').startsWith('#')) return false;
+                if (a.closest('form')) return false;
+                
+                try {
+                    const url = new URL(a.href, window.location.origin);
+                    if (url.origin !== window.location.origin) return false;
+                    const path = url.pathname;
+                    const prefix = "{{ config('admin.prefix', 'office') }}";
+                    return path.startsWith('/' + prefix) || path.startsWith('/admin') || path.startsWith('/office');
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            async function prefetch(url) {
+                if (prefetchCache.has(url)) {
+                    const item = prefetchCache.get(url);
+                    if (Date.now() - item.time < 30000) return;
+                }
+                try {
+                    const res = await fetch(url, {
+                        headers: { 'X-Seamless-Prefetch': '1', 'Accept': 'text/html' }
+                    });
+                    if (res.ok) {
+                        const html = await res.text();
+                        prefetchCache.set(url, { html, time: Date.now() });
+                    }
+                } catch (e) {}
+            }
+
+            async function navigateTo(targetUrl, updateHistory = true) {
+                const url = new URL(targetUrl, window.location.origin).href;
+
+                window.dispatchEvent(new CustomEvent('seamless:before-swap'));
+
+                startProgress();
+
+                let html = null;
+                if (prefetchCache.has(url)) {
+                    const cached = prefetchCache.get(url);
+                    if (Date.now() - cached.time < 30000) {
+                        html = cached.html;
+                    }
+                }
+
+                if (!html) {
+                    try {
+                        const res = await fetch(url, {
+                            headers: { 'X-Seamless-Navigation': '1', 'Accept': 'text/html' }
+                        });
+                        
+                        const prefix = "{{ config('admin.prefix', 'office') }}";
+                        if (!res.ok || (res.redirected && !res.url.includes(prefix))) {
+                            window.location.href = res.url || url;
+                            return;
+                        }
+                        html = await res.text();
+                        prefetchCache.set(url, { html, time: Date.now() });
+                    } catch (e) {
+                        window.location.href = url;
+                        return;
+                    }
+                }
+
+                const parser = new DOMParser();
+                const doc = parser.parseFromString(html, 'text/html');
+                const newMain = doc.querySelector('main');
+                const currentMain = document.querySelector('main');
+
+                if (!newMain || !currentMain) {
+                    window.location.href = url;
+                    return;
+                }
+
+                const newTitle = doc.querySelector('title');
+                if (newTitle) {
+                    document.title = newTitle.innerText;
+                }
+
+                currentMain.style.opacity = '0.7';
+                setTimeout(() => {
+                    currentMain.innerHTML = newMain.innerHTML;
+                    currentMain.className = newMain.className;
+                    currentMain.style.opacity = '1';
+
+                    // Re-run inline scripts inside main
+                    const scripts = currentMain.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        Array.from(oldScript.attributes).forEach(attr => newScript.setAttribute(attr.name, attr.value));
+                        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
+
+                    // Re-initialize Alpine on the new main content
+                    if (window.Alpine) {
+                        try {
+                            window.Alpine.initTree(currentMain);
+                        } catch (e) {
+                            console.warn('Alpine initTree warning:', e);
+                        }
+                    }
+
+                    // Update Active State on Sidebar Links
+                    updateSidebarActiveLink(url);
+
+                    // Close mobile sidebar if open
+                    const bodyEl = document.querySelector('body[x-data]');
+                    if (bodyEl && window.Alpine) {
+                        try {
+                            const data = window.Alpine.$data(bodyEl);
+                            if (data && data.sidebarOpen) data.sidebarOpen = false;
+                        } catch (e) {}
+                    }
+
+                    if (updateHistory) {
+                        window.history.pushState({}, '', url);
+                    }
+
+                    window.scrollTo({ top: 0, behavior: 'instant' });
+                    endProgress();
+
+                    window.dispatchEvent(new CustomEvent('seamless:swapped', { detail: { url } }));
+                }, 40);
+            }
+
+            function updateSidebarActiveLink(targetUrl) {
+                const targetPath = new URL(targetUrl, window.location.origin).pathname;
+                const links = document.querySelectorAll('aside nav a');
+
+                links.forEach(a => {
+                    const linkPath = new URL(a.href, window.location.origin).pathname;
+                    const prefix = "{{ config('admin.prefix', 'office') }}";
+                    
+                    const isRootDashboard = linkPath === '/' + prefix || linkPath === '/admin' || linkPath === '/office';
+                    const isActive = isRootDashboard 
+                        ? (targetPath === linkPath)
+                        : (targetPath === linkPath || (linkPath.length > 5 && targetPath.startsWith(linkPath)));
+
+                    if (isActive) {
+                        a.classList.add('bg-indigo-600/10', 'text-indigo-400', 'border', 'border-indigo-500/20');
+                        a.classList.remove('text-slate-300', 'hover:bg-slate-800/60', 'hover:text-white');
+                    } else {
+                        a.classList.remove('bg-indigo-600/10', 'text-indigo-400', 'border', 'border-indigo-500/20');
+                        a.classList.add('text-slate-300', 'hover:bg-slate-800/60', 'hover:text-white');
+                    }
+                });
+            }
+
+            // 1. Delegated Click Handler for all links
+            document.addEventListener('click', (e) => {
+                if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || e.defaultPrevented) return;
+                if (e.button !== 0) return;
+
+                const link = e.target.closest('a');
+                if (!isInternalAdminLink(link)) return;
+
+                if (link.href === window.location.href) {
+                    e.preventDefault();
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                    return;
+                }
+
+                e.preventDefault();
+                navigateTo(link.href, true);
+            });
+
+            // 2. Pre-fetching on Hover
+            document.addEventListener('mouseover', (e) => {
+                const link = e.target.closest('a');
+                if (!isInternalAdminLink(link)) return;
+                if (link.href === window.location.href) return;
+
+                clearTimeout(hoverTimeout);
+                hoverTimeout = setTimeout(() => {
+                    prefetch(link.href);
+                }, 60);
+            });
+
+            document.addEventListener('mouseout', (e) => {
+                const link = e.target.closest('a');
+                if (link) {
+                    clearTimeout(hoverTimeout);
+                }
+            });
+
+            // 3. Browser Back / Forward Buttons
+            window.addEventListener('popstate', () => {
+                navigateTo(window.location.href, false);
+            });
+
+            window.Seamless = { navigateTo, prefetch };
+        })();
+    </script>
 </body>
 </html>
