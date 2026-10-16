@@ -7,10 +7,18 @@
                 <p class="mt-1 text-sm text-slate-400">Selamat datang, {{ $admin->name }}. Ringkasan transaksi dan infrastruktur sistem terkini.</p>
             </div>
             <div class="flex items-center gap-3">
-                <span class="inline-flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 text-xs font-mono">
-                    <span class="w-2 h-2 rounded-full" :class="isLive ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'"></span>
-                    <span x-text="isLive ? 'Auto-Sync: 10s' : 'Paused'">Auto-Sync: 10s</span>
-                </span>
+                {{-- Live SSE Toggle Button --}}
+                <button type="button"
+                        @click="toggleLiveStream()"
+                        :class="isLive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'"
+                        class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-xl border text-xs font-semibold transition-all">
+                    <span class="relative flex h-2 w-2">
+                        <span x-show="isLive" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span :class="isLive ? 'bg-emerald-500' : 'bg-slate-500'" class="relative inline-flex rounded-full h-2 w-2"></span>
+                    </span>
+                    <span x-text="isLive ? '⚡ Live SSE: ON' : 'Live: OFF'">⚡ Live SSE: ON</span>
+                </button>
+
                 <button @click="fetchMetrics()"
                         class="p-2 rounded-xl bg-slate-900 border border-slate-800 text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
                         title="Perbarui Manual">
@@ -40,7 +48,7 @@
     <script nonce="{{ $csp_nonce ?? '' }}">
         function dashboardPoller() {
             return {
-                timer: null,
+                eventSource: null,
                 isLive: true,
                 isRefreshing: false,
                 metrics: @json($metrics),
@@ -50,37 +58,76 @@
 
                 init() {
                     this.initChart();
-                    this.startPolling();
+                    this.startStream();
 
                     window.addEventListener('seamless:before-swap', () => {
-                        if (this.timer) {
-                            clearInterval(this.timer);
-                            this.timer = null;
-                        }
+                        this.stopStream();
                         if (this.chartInstance) {
                             try { this.chartInstance.destroy(); } catch (e) {}
                             this.chartInstance = null;
                         }
                     }, { once: true });
-                },
-
-                startPolling() {
-                    // Polling interval 10 detik
-                    this.timer = setInterval(() => {
-                        if (document.visibilityState === 'visible') {
-                            this.fetchMetrics();
-                        }
-                    }, 10000);
 
                     // Pause saat user pindah tab, resume otomatis saat kembali
                     document.addEventListener('visibilitychange', () => {
-                        if (document.visibilityState === 'visible') {
-                            this.isLive = true;
-                            this.fetchMetrics();
+                        if (document.visibilityState === 'visible' && this.isLive) {
+                            this.startStream();
                         } else {
-                            this.isLive = false;
+                            this.stopStream(false);
                         }
                     });
+                },
+
+                // Buka koneksi Server-Sent Events (SSE)
+                startStream() {
+                    if (this.eventSource) return;
+
+                    try {
+                        this.eventSource = new EventSource('{{ route('admin.dashboard.stream') }}');
+
+                        this.eventSource.addEventListener('initial', (e) => {
+                            try {
+                                const data = JSON.parse(e.data);
+                                this.metrics = data.metrics;
+                                this.providers = data.providers;
+                            } catch (err) {}
+                        });
+
+                        this.eventSource.addEventListener('update', (e) => {
+                            try {
+                                const data = JSON.parse(e.data);
+                                this.metrics = data.metrics;
+                                this.providers = data.providers;
+                            } catch (err) {}
+                        });
+
+                        this.eventSource.onerror = () => {
+                            // EventSource otomatis mencoba reconnect setelah 3 detik
+                        };
+                    } catch (e) {
+                        console.warn('SSE tidak didukung browser, fallback ke manual refresh:', e);
+                    }
+                },
+
+                // Tutup koneksi SSE
+                stopStream(setInactive = true) {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
+                    }
+                    if (setInactive) {
+                        this.isLive = false;
+                    }
+                },
+
+                // Toggle saklar Live SSE ON/OFF
+                toggleLiveStream() {
+                    this.isLive = !this.isLive;
+                    if (this.isLive) {
+                        this.startStream();
+                    } else {
+                        this.stopStream(true);
+                    }
                 },
 
                 async fetchMetrics() {

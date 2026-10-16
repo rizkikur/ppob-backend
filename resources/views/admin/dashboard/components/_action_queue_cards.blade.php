@@ -23,7 +23,7 @@
         </div>
         <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
             <span class="text-slate-400">Diperbarui realtime melalui background worker</span>
-            <a href="#transactions" class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
+            <a href="{{ route('admin.transactions.index', ['status' => 'pending']) }}" class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
                 Buka Antrean &rarr;
             </a>
         </div>
@@ -53,7 +53,7 @@
         </div>
         <div class="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-xs">
             <span class="text-slate-400">Wajib konfirmasi sebelum saldo dikreditkan</span>
-            <a href="#finance" class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
+            <a href="{{ route('admin.finance.topups.index', ['status' => 'pending']) }}" class="text-indigo-400 hover:text-indigo-300 font-medium flex items-center gap-1">
                 Verifikasi Bukti &rarr;
             </a>
         </div>

@@ -184,8 +184,7 @@
         function transactionTableManager() {
             return {
                 liveEnabled: false,
-                countdown: 15,
-                intervalTimer: null,
+                eventSource: null,
                 isFetching: false,
                 lastUpdated: 'Baru saja',
 
@@ -202,12 +201,12 @@
                         this.fetchTable(window.location.href, false);
                     });
 
-                    // 2. Pause live polling saat tab tidak aktif
+                    // 2. Pause live stream SSE saat tab tidak aktif (hemat resource)
                     document.addEventListener('visibilitychange', () => {
                         if (document.hidden && this.liveEnabled) {
-                            this.pausePolling();
+                            this.stopLiveStream();
                         } else if (!document.hidden && this.liveEnabled) {
-                            this.startPolling();
+                            this.startLiveStream();
                         }
                     });
 
@@ -223,9 +222,9 @@
                         });
                     }
 
-                    // 4. Bersihkan timer polling saat seamless navigation berpindah halaman
+                    // 4. Bersihkan koneksi SSE saat seamless navigation berpindah halaman
                     document.addEventListener('seamless:before-swap', () => {
-                        this.clearTimer();
+                        this.stopLiveStream();
                         if (this.exportPollingTimer) {
                             clearInterval(this.exportPollingTimer);
                         }
@@ -262,6 +261,9 @@
                     if (!form) return;
                     const cleanUrl = this.buildCleanUrl(form);
                     this.fetchTable(cleanUrl, true);
+                    if (this.liveEnabled) {
+                        this.startLiveStream();
+                    }
                 },
 
                 // Reset Filter: bersihkan input dan load URL default
@@ -283,6 +285,9 @@
                         });
                     }
                     this.fetchTable(resetUrl, true);
+                    if (this.liveEnabled) {
+                        this.startLiveStream();
+                    }
                 },
 
                 // Ekspor CSV dengan parameter aktif yang bersih (Sinkron)
@@ -456,37 +461,102 @@
                     }
                 },
 
-                // Fitur Live Polling 15 detik
+                // Fitur Realtime Server-Sent Events (SSE) Stream
                 toggleLive() {
                     this.liveEnabled = !this.liveEnabled;
                     if (this.liveEnabled) {
-                        this.countdown = 15;
-                        this.startPolling();
+                        this.startLiveStream();
                     } else {
-                        this.pausePolling();
+                        this.stopLiveStream();
                     }
                 },
 
-                startPolling() {
-                    this.clearTimer();
-                    this.intervalTimer = setInterval(() => {
-                        if (document.hidden) return;
-                        this.countdown--;
-                        if (this.countdown <= 0) {
-                            this.fetchTable(window.location.href, false);
-                            this.countdown = 15;
+                startLiveStream() {
+                    this.stopLiveStream();
+
+                    try {
+                        const streamUrl = new URL('{{ route('admin.transactions.stream') }}', window.location.origin);
+                        const form = document.querySelector('form[data-filter-form]');
+                        if (form) {
+                            const formData = new FormData(form);
+                            for (const [key, value] of formData.entries()) {
+                                const trimmed = typeof value === 'string' ? value.trim() : value;
+                                if (trimmed !== '') {
+                                    streamUrl.searchParams.set(key, trimmed);
+                                }
+                            }
                         }
-                    }, 1000);
+
+                        this.eventSource = new EventSource(streamUrl.toString());
+
+                        this.eventSource.addEventListener('transaction', (e) => {
+                            try {
+                                const tx = JSON.parse(e.data);
+                                this.handleTransactionEvent(tx);
+                            } catch (err) {
+                                console.error('SSE Transaction JSON error:', err);
+                            }
+                        });
+
+                        this.eventSource.addEventListener('error', () => {
+                            // EventSource otomatis mencoba auto-reconnect saat loop 25 detik berakhir
+                        });
+                    } catch (e) {
+                        console.error('Gagal membuka koneksi stream transaksi:', e);
+                    }
                 },
 
-                pausePolling() {
-                    this.clearTimer();
+                stopLiveStream() {
+                    if (this.eventSource) {
+                        this.eventSource.close();
+                        this.eventSource = null;
+                    }
                 },
 
-                clearTimer() {
-                    if (this.intervalTimer) {
-                        clearInterval(this.intervalTimer);
-                        this.intervalTimer = null;
+                handleTransactionEvent(tx) {
+                    const row = document.querySelector(`tr[data-trx-id="${tx.id}"]`);
+                    const now = new Date();
+                    this.lastUpdated = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+
+                    if (row) {
+                        // Perbarui status badge jika ada perubahan
+                        const badge = row.querySelector('[data-status-badge]');
+                        if (badge) {
+                            badge.setAttribute('data-status-badge', tx.status);
+                            badge.textContent = tx.status.charAt(0).toUpperCase() + tx.status.slice(1);
+                            badge.className = 'inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border ' + this.getStatusBadgeClass(tx.status);
+                        }
+
+                        // Efek highlight baris
+                        row.classList.add('bg-indigo-500/20');
+                        setTimeout(() => row.classList.remove('bg-indigo-500/20'), 1500);
+
+                        // Jika filter status sedang aktif dan status transaksi berubah menjadi status lain
+                        const statusSelect = document.getElementById('status');
+                        const activeStatusFilter = statusSelect ? statusSelect.value : '';
+                        if (activeStatusFilter && tx.status !== activeStatusFilter) {
+                            row.style.transition = 'all 0.6s ease';
+                            row.style.opacity = '0.35';
+                            setTimeout(() => {
+                                if (row.parentElement) {
+                                    row.remove();
+                                }
+                            }, 2500);
+                        }
+                    } else {
+                        // Transaksi baru masuk yang cocok dengan filter aktif, perbarui tabel via AJAX
+                        this.fetchTable(window.location.href, false);
+                    }
+                },
+
+                getStatusBadgeClass(status) {
+                    switch (status) {
+                        case 'success': return 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20';
+                        case 'pending': return 'bg-amber-500/10 text-amber-400 border-amber-500/20';
+                        case 'processing': return 'bg-blue-500/10 text-blue-400 border-blue-500/20';
+                        case 'failed': return 'bg-rose-500/10 text-rose-400 border-rose-500/20';
+                        case 'refunded': return 'bg-purple-500/10 text-purple-400 border-purple-500/20';
+                        default: return 'bg-slate-500/10 text-slate-400 border-slate-500/20';
                     }
                 }
             };

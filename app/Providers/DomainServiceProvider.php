@@ -66,6 +66,7 @@ class DomainServiceProvider extends ServiceProvider
         $this->app->singleton(InquiryService::class);
         $this->app->singleton(TransactionService::class);
         $this->app->singleton(\App\Domain\Transaction\Services\TransactionMetricService::class);
+        $this->app->singleton(\App\Domain\Transaction\Services\TransactionEventStreamer::class);
         $this->app->singleton(\App\Domain\Shared\Services\OperationalAlertService::class);
     }
 

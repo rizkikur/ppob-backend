@@ -68,10 +68,12 @@ $adminRoute->group(function () {
         // Dashboard
         Route::get('/dashboard', [AdminDashboardController::class, 'index'])->name('dashboard');
         Route::get('/dashboard/metrics', [AdminDashboardController::class, 'metrics'])->name('dashboard.metrics');
+        Route::get('/dashboard/stream', [AdminDashboardController::class, 'stream'])->name('dashboard.stream');
 
         // Transactions Management & Manual Interventions
         Route::prefix('transactions')->name('transactions.')->group(function () {
             Route::get('/', [AdminTransactionController::class, 'index'])->name('index');
+            Route::get('/stream', [AdminTransactionController::class, 'stream'])->name('stream');
 
             // Asynchronous CSV Export & Tracking
             Route::post('/export/async', [AdminTransactionExportController::class, 'store'])->name('export.async');

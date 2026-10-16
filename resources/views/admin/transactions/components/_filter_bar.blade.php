@@ -145,16 +145,17 @@
 
             {{-- Action Buttons Right Group --}}
             <div class="flex items-center justify-between sm:justify-end gap-2.5 flex-wrap pt-2 lg:pt-0">
-                {{-- Live Polling Toggle Button --}}
+                {{-- Live Stream SSE Toggle Button --}}
                 <button type="button"
                         @click="toggleLive()"
-                        :class="liveEnabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:text-slate-200'"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all">
+                        :class="liveEnabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:text-slate-200'"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all"
+                        :title="liveEnabled ? 'Monitoring Realtime SSE Aktif' : 'Aktifkan Monitoring Realtime SSE'">
                     <span class="relative flex h-2 w-2">
                         <span x-show="liveEnabled" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span :class="liveEnabled ? 'bg-emerald-500' : 'bg-slate-500'" class="relative inline-flex rounded-full h-2 w-2"></span>
                     </span>
-                    <span x-text="liveEnabled ? 'Live: ' + countdown + 's' : 'Live: OFF'">Live: OFF</span>
+                    <span x-text="liveEnabled ? '⚡ Live SSE: ON' : 'Live SSE: OFF'">Live SSE: OFF</span>
                 </button>
 
                 {{-- Manual Refresh Button --}}

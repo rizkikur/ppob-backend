@@ -23,7 +23,7 @@
                         $marginPct = $baseCost > 0 ? round(($margin / $baseCost) * 100, 1) : 0;
                         $durationSeconds = $trx->updated_at && $trx->created_at ? max(0, $trx->updated_at->diffInSeconds($trx->created_at)) : 0;
                     @endphp
-                    <tr class="hover:bg-slate-700/30 transition-colors group">
+                    <tr data-trx-id="{{ $trx->id }}" class="hover:bg-slate-700/30 transition-colors group">
                         {{-- ID & Waktu / SLA --}}
                         <td class="py-3.5 px-3.5 whitespace-nowrap">
                             <div class="font-mono text-xs font-bold text-indigo-400">#{{ $trx->id }}</div>
@@ -110,7 +110,7 @@
                                     default => 'bg-slate-500/10 text-slate-400 border-slate-500/20',
                                 };
                             @endphp
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border {{ $badgeClass }}">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border {{ $badgeClass }}" data-status-badge="{{ $trx->status }}">
                                 {{ ucfirst($trx->status) }}
                             </span>
                         </td>

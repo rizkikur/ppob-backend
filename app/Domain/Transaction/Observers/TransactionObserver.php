@@ -3,6 +3,7 @@
 namespace App\Domain\Transaction\Observers;
 
 use App\Domain\Transaction\Models\Transaction;
+use App\Domain\Transaction\Services\TransactionEventStreamer;
 use App\Domain\Transaction\Services\TransactionMetricService;
 
 class TransactionObserver
@@ -13,6 +14,7 @@ class TransactionObserver
     public function created(Transaction $transaction): void
     {
         app(TransactionMetricService::class)->recordCreated($transaction);
+        app(TransactionEventStreamer::class)->broadcast($transaction, 'created');
     }
 
     /**
@@ -20,6 +22,11 @@ class TransactionObserver
      */
     public function updated(Transaction $transaction): void
     {
+        $oldStatus = $transaction->getOriginal('status');
         app(TransactionMetricService::class)->recordUpdated($transaction);
+
+        if ($transaction->wasChanged('status')) {
+            app(TransactionEventStreamer::class)->broadcast($transaction, 'updated', $oldStatus);
+        }
     }
 }
