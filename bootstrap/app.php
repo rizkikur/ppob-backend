@@ -22,6 +22,8 @@ return Application::configure(basePath: dirname(__DIR__))
         apiPrefix: '',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->trustProxies(at: '*');
+
         $middleware->redirectGuestsTo(function (Request $request) {
             $prefix = config('admin.prefix', 'office');
             if ($request->is("{$prefix}*") || $request->is('admin*')) {
