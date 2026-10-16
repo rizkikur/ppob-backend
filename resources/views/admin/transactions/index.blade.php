@@ -44,7 +44,7 @@
         @include('admin.transactions.components._filter_bar')
 
         {{-- Transactions Table Container for AJAX & Live Auto-Refresh --}}
-        <div id="transaction-table-container" class="relative">
+        <div id="transaction-table-container" class="relative z-10" style="position: relative; z-index: 10;">
             {{-- Instant Shimmer / Spinner Loading Overlay (0ms perceived latency) --}}
             <div x-show="isFetching" x-cloak
                  class="absolute inset-0 z-20 bg-slate-950/60 backdrop-blur-[2px] flex items-center justify-center rounded-2xl transition-all">

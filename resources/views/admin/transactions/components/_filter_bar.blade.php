@@ -36,7 +36,8 @@
             this.dateEnd = '';
         }
      }"
-     class="relative z-30 bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-5 shadow-xl">
+     class="relative z-40 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl"
+     style="position: relative; z-index: 40;">
     <form data-filter-form method="GET" action="{{ route('admin.transactions.index') }}" @submit.prevent="applyFilter($event)" class="space-y-4">
         {{-- Row 1: Search & Primary Dropdowns in Flexible Row --}}
         <div class="flex flex-col lg:flex-row gap-3.5 items-stretch lg:items-end">
@@ -175,7 +176,7 @@
                 </button>
 
                 {{-- Export CSV Dropdown Menu --}}
-                <div class="relative" x-data="{ open: false }" @click.outside="open = false">
+                <div class="relative z-50" x-data="{ open: false }" @click.outside="open = false" style="position: relative; z-index: 50;">
                     <button type="button"
                             @click="open = !open"
                             class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
@@ -185,7 +186,8 @@
                     </button>
 
                     <div x-show="open" x-cloak
-                         class="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl py-2 z-50">
+                         class="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl py-2 z-50"
+                         style="z-index: 100;">
                         <div class="px-3.5 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
                             Pilihan Unduhan CSV
                         </div>
