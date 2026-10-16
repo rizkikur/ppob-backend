@@ -65,12 +65,16 @@ class DomainServiceProvider extends ServiceProvider
         $this->app->singleton(PpobService::class);
         $this->app->singleton(InquiryService::class);
         $this->app->singleton(TransactionService::class);
+        $this->app->singleton(\App\Domain\Transaction\Services\TransactionMetricService::class);
     }
 
     public function boot(): void
     {
         // Daftarkan model User domain sebagai provider autentikasi Sanctum
         config(['auth.providers.users.model' => User::class]);
+
+        // Daftarkan TransactionObserver untuk pelacakan metrik real-time & agregasi harian
+        \App\Domain\Transaction\Models\Transaction::observe(\App\Domain\Transaction\Observers\TransactionObserver::class);
 
         if ($this->app->runningInConsole()) {
             $this->commands([
@@ -79,8 +83,8 @@ class DomainServiceProvider extends ServiceProvider
                 CleanupExpiredTokensCommand::class,
                 CheckProviderHealthCommand::class,
                 RetryFailedWebhooksCommand::class,
+                \App\Domain\Transaction\Commands\AggregateDailyTransactionMetricsCommand::class,
             ]);
         }
-
     }
 }
