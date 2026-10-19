@@ -201,4 +201,43 @@ class TransactionPinTest extends TestCase
                 'error_code' => 'PIN_TOKEN_USED',
             ]);
     }
+
+    public function test_changing_pin_revokes_previously_issued_pin_tokens(): void
+    {
+        $pinService = app(\App\Domain\Security\Services\PinService::class);
+        $pinService->setPin($this->user, '123456');
+
+        $token = PinVerificationToken::create([
+            'user_id' => $this->user->id,
+            'token' => Str::random(40),
+            'purpose' => 'transaction',
+            'expires_at' => now()->addMinutes(5),
+        ]);
+
+        $this->assertDatabaseHas('pin_verification_tokens', ['id' => $token->id]);
+
+        // Ganti PIN
+        $pinService->changePin($this->user, '654321');
+
+        // Token lama harus sudah ter-invalidate (used_at terisi)
+        $token->refresh();
+        $this->assertNotNull($token->used_at);
+
+        // Transaksi dengan token lama harus ditolak dengan PIN_TOKEN_USED
+        Sanctum::actingAs($this->user);
+        $response = $this->withHeaders([
+            'Idempotency-Key' => 'IDEMP-'.Str::uuid(),
+            'X-Pin-Token' => $token->token,
+        ])->postJson('/transactions', [
+            'sku_code' => $this->product->sku_code,
+            'customer_number' => '081234567890',
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJson([
+                'success' => false,
+                'error_code' => 'PIN_TOKEN_USED',
+            ]);
+    }
 }
+
