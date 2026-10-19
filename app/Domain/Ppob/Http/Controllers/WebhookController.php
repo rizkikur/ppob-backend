@@ -23,11 +23,19 @@ use Illuminate\Http\Request;
  */
 class WebhookController extends ApiController
 {
+    protected ?TopupService $topupService;
+    protected ?PpobService $ppobService;
+    protected ?TransactionService $transactionService;
+
     public function __construct(
-        private readonly ?TopupService $topupService = null,
-        private readonly ?PpobService $ppobService = null,
-        private readonly ?TransactionService $transactionService = null
-    ) {}
+        ?TopupService $topupService = null,
+        ?PpobService $ppobService = null,
+        ?TransactionService $transactionService = null
+    ) {
+        $this->topupService = $topupService;
+        $this->ppobService = $ppobService;
+        $this->transactionService = $transactionService;
+    }
 
     public function ppobCallback(Request $request): JsonResponse
     {
@@ -95,11 +103,14 @@ class WebhookController extends ApiController
             $txService = $this->transactionService ?? app(TransactionService::class);
             $status = strtolower((string) ($request->input('status') ?? ''));
 
-            if (in_array($status, ['success', 'paid', 'settlement', 'completed'], true)) {
-                $txService->markSuccess($tx, (string) ($providerRef ?? $tx->provider_ref), $request->all());
-            } elseif (in_array($status, ['failed', 'failure', 'expired', 'cancelled'], true)) {
-                $reason = $request->input('failure_reason') ?? $request->input('message') ?? 'Provider webhook reported failure';
-                $txService->failAndRefund($tx, (string) $reason, $request->all());
+            // Abaikan jika transaksi sudah terminal (SUCCESS, FAILED, REFUNDED)
+            if (! in_array($tx->status, [Transaction::STATUS_SUCCESS, Transaction::STATUS_FAILED, Transaction::STATUS_REFUNDED], true)) {
+                if (in_array($status, ['success', 'paid', 'settlement', 'completed'], true)) {
+                    $txService->markSuccess($tx, (string) ($providerRef ?? $tx->provider_ref), $request->all());
+                } elseif (in_array($status, ['failed', 'failure', 'expired', 'cancelled'], true)) {
+                    $reason = $request->input('failure_reason') ?? $request->input('message') ?? 'Provider webhook reported failure';
+                    $txService->failAndRefund($tx, (string) $reason, $request->all());
+                }
             }
         }
 

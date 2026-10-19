@@ -97,6 +97,30 @@ class OperationalAlertService
     }
 
     /**
+     * Kirim peringatan saat produk otomatis dinonaktifkan karena kenaikan modal upstream.
+     */
+    public function notifyProductAutoFrozen(string $productSku, string $productName, int $oldCostCents, int $newCostCents, int $sellPriceCents): bool
+    {
+        $oldCost = number_format($oldCostCents / 100, 0, ',', '.');
+        $newCost = number_format($newCostCents / 100, 0, ',', '.');
+        $sellPrice = number_format($sellPriceCents / 100, 0, ',', '.');
+        $margin = $sellPriceCents - $newCostCents;
+        $marginStr = number_format($margin / 100, 0, ',', '.');
+
+        $title = "🧊 [PRODUCT AUTO-FROZEN] {$productSku}";
+        $msg = "Produk <b>{$productSku}</b> ({$productName}) telah <b>DINONAKTIFKAN OTOMATIS</b>.\n";
+        $msg .= "Modal Lama: <b>Rp {$oldCost}</b>\n";
+        $msg .= "Modal Baru: <b>Rp {$newCost}</b> (↑ naik dari upstream)\n";
+        $msg .= "Harga Jual: <b>Rp {$sellPrice}</b>\n";
+        $msg .= "Margin: <b>Rp {$marginStr}</b>" . ($margin <= 0 ? " ⚠️ RUGI!" : "") . "\n";
+        $msg .= "Tindakan: Perbarui harga jual di panel admin, lalu aktifkan kembali produk.";
+
+        $dedupKey = "product_frozen:{$productSku}";
+
+        return $this->sendAlert($title, $msg, 'critical', $dedupKey);
+    }
+
+    /**
      * Eksekusi pengiriman alert dengan proteksi anti-spam (throttling deduplication).
      */
     public function sendAlert(string $title, string $message, string $level = 'warning', ?string $dedupKey = null): bool

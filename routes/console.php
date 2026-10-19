@@ -37,3 +37,10 @@ Schedule::command('ppob:webhook:retry')
     ->name('ppob-webhook-retry')
     ->withoutOverlapping()
     ->runInBackground();
+
+// 5. Rekonsiliasi transaksi PROCESSING yang stuck (stale > 30 menit)
+Schedule::command('ppob:transactions:reconcile --stale-minutes=30 --auto-resolve')
+    ->everyFifteenMinutes()
+    ->name('ppob-reconcile-stale')
+    ->withoutOverlapping()
+    ->runInBackground();

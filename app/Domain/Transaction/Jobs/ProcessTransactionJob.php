@@ -67,6 +67,19 @@ class ProcessTransactionJob implements ShouldQueue
                     if ($upstreamCostCents >= ($tx->sell_price_cents?->toCents() ?? 0) || config('ppob.auto_freeze_on_price_hike', true)) {
                         $product->update(['is_active' => false]);
                         \Illuminate\Support\Facades\Log::warning("Produk {$product->sku_code} dinonaktifkan otomatis karena kenaikan modal upstream ({$currentBaseCents} -> {$upstreamCostCents})");
+
+                        // Alert ke admin via Telegram/email agar segera ditindaklanjuti
+                        try {
+                            app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyProductAutoFrozen(
+                                $product->sku_code,
+                                $product->name,
+                                $currentBaseCents,
+                                $upstreamCostCents,
+                                $tx->sell_price_cents?->toCents() ?? 0
+                            );
+                        } catch (\Throwable) {
+                            // Jangan ganggu flow transaksi jika alert gagal
+                        }
                     }
                 }
             }

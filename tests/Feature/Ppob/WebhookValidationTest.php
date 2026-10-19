@@ -296,4 +296,112 @@ class WebhookValidationTest extends TestCase
             'reference_id' => $tx->id,
         ]);
     }
+
+    public function test_webhook_ignores_already_successful_transaction(): void
+    {
+        $tx = Transaction::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'customer_number' => '1234567890',
+            'amount_cents' => 1050000,
+            'sell_price_cents' => 1050000,
+            'status' => Transaction::STATUS_SUCCESS,
+            'provider_ref' => 'REF-PLN-SUCCESS-01',
+            'provider_response' => ['serial_number' => 'ORIGINAL-SN-12345'],
+            'idempotency_key' => 'TX-WH-ALREADY-SUCCESS',
+        ]);
+
+        $wallet = Wallet::where('user_id', $this->user->id)->first();
+        $balanceBefore = $wallet->balance_cents->toCents();
+
+        // Webhook terlambat/nyasar mencoba mengubah status jadi failed
+        $payload = [
+            'event_id' => 'EVT-LATE-'.Str::uuid(),
+            'transaction_id' => $tx->id,
+            'status' => 'failed',
+            'failure_reason' => 'Late provider rejection',
+        ];
+
+        $signature = $this->generateSignature($payload);
+
+        $response = $this->withHeaders([
+            'X-Signature' => $signature,
+            'X-Timestamp' => (string) now()->timestamp,
+            'X-Provider' => 'pln',
+        ])->postJson('/ppob/callback', $payload);
+
+        $response->assertStatus(200);
+
+        // Status harus tetap SUCCESS dan provider_response tidak berubah
+        $tx->refresh();
+        $this->assertEquals(Transaction::STATUS_SUCCESS, $tx->status);
+        $this->assertEquals('ORIGINAL-SN-12345', $tx->provider_response['serial_number'] ?? null);
+
+        // Saldo user TIDAK boleh di-refund
+        $wallet->refresh();
+        $this->assertEquals($balanceBefore, $wallet->balance_cents->toCents());
+        $this->assertDatabaseMissing('wallet_mutations', [
+            'user_id' => $this->user->id,
+            'reference_type' => WalletMutation::REF_REFUND,
+            'reference_id' => $tx->id,
+        ]);
+    }
+
+    public function test_webhook_ignores_already_failed_transaction_and_prevents_double_refund(): void
+    {
+        $tx = Transaction::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'customer_number' => '1234567890',
+            'amount_cents' => 1050000,
+            'sell_price_cents' => 1050000,
+            'status' => Transaction::STATUS_FAILED,
+            'provider_ref' => 'REF-PLN-FAIL-02',
+            'idempotency_key' => 'TX-WH-ALREADY-FAILED',
+        ]);
+
+        // Simulasikan refund awal sudah tercatat
+        WalletMutation::create([
+            'wallet_id' => Wallet::where('user_id', $this->user->id)->first()->id,
+            'user_id' => $this->user->id,
+            'type' => WalletMutation::TYPE_CREDIT,
+            'amount_cents' => 1050000,
+            'balance_after_cents' => 10000000,
+            'reference_type' => WalletMutation::REF_REFUND,
+            'reference_id' => $tx->id,
+            'description' => 'Initial refund',
+        ]);
+
+        $wallet = Wallet::where('user_id', $this->user->id)->first();
+        $balanceBefore = $wallet->balance_cents->toCents();
+
+        // Webhook duplikat/terlambat mengirim status failed lagi
+        $payload = [
+            'event_id' => 'EVT-DUP-FAIL-'.Str::uuid(),
+            'transaction_id' => $tx->id,
+            'status' => 'failed',
+            'failure_reason' => 'Repeated fail webhook',
+        ];
+
+        $signature = $this->generateSignature($payload);
+
+        $response = $this->withHeaders([
+            'X-Signature' => $signature,
+            'X-Timestamp' => (string) now()->timestamp,
+            'X-Provider' => 'pln',
+        ])->postJson('/ppob/callback', $payload);
+
+        $response->assertStatus(200);
+
+        // Saldo TIDAK bertambah lagi (mencegah double refund)
+        $wallet->refresh();
+        $this->assertEquals($balanceBefore, $wallet->balance_cents->toCents());
+
+        // Jumlah mutasi refund untuk transaksi ini tetap tepat 1
+        $refundCount = WalletMutation::where('reference_type', WalletMutation::REF_REFUND)
+            ->where('reference_id', $tx->id)
+            ->count();
+        $this->assertEquals(1, $refundCount);
+    }
 }
+

@@ -88,6 +88,7 @@ class DomainServiceProvider extends ServiceProvider
                 \App\Domain\Transaction\Commands\AggregateDailyTransactionMetricsCommand::class,
                 \App\Domain\Admin\Commands\CleanupExportsCommand::class,
                 \App\Domain\Shared\Commands\TestOperationalAlertCommand::class,
+                \App\Domain\Transaction\Commands\ReconcileStaleTransactionsCommand::class,
             ]);
         }
     }

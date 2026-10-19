@@ -10,7 +10,9 @@ use App\Domain\Product\Models\Provider;
 use App\Domain\Security\Models\PinVerificationToken;
 use App\Domain\Transaction\Jobs\ProcessTransactionJob;
 use App\Domain\Transaction\Models\Transaction;
+use App\Domain\Transaction\Services\TransactionService;
 use App\Domain\Wallet\Models\Wallet;
+use App\Domain\Wallet\Models\WalletMutation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
@@ -253,4 +255,65 @@ class TransactionFlowTest extends TestCase
                 'error_code' => 'PRODUCT_NOT_FOUND',
             ]);
     }
+
+    public function test_fail_and_refund_guards_against_double_refund(): void
+    {
+        $service = app(TransactionService::class);
+        $wallet = Wallet::where('user_id', $this->user->id)->first();
+        $initialBalance = $wallet->balance_cents->toCents();
+
+        $tx = Transaction::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'customer_number' => '081234567890',
+            'amount_cents' => 1050000,
+            'sell_price_cents' => 1050000,
+            'status' => Transaction::STATUS_PROCESSING,
+            'idempotency_key' => 'TX-FAIL-REFUND-GUARD-1',
+        ]);
+
+        // Panggilan pertama failAndRefund: harus me-refund
+        $service->failAndRefund($tx, 'Supplier down');
+        $tx->refresh();
+        $wallet->refresh();
+
+        $this->assertEquals(Transaction::STATUS_FAILED, $tx->status);
+        $this->assertEquals($initialBalance + 1050000, $wallet->balance_cents->toCents());
+        $this->assertDatabaseCount('wallet_mutations', 1);
+
+        // Panggilan kedua failAndRefund: TIDAK boleh me-refund lagi
+        $service->failAndRefund($tx, 'Duplicate fail call');
+        $wallet->refresh();
+
+        $this->assertEquals($initialBalance + 1050000, $wallet->balance_cents->toCents());
+        $this->assertDatabaseCount('wallet_mutations', 1);
+    }
+
+    public function test_fail_and_refund_does_not_refund_already_successful_transaction(): void
+    {
+        $service = app(TransactionService::class);
+        $wallet = Wallet::where('user_id', $this->user->id)->first();
+        $initialBalance = $wallet->balance_cents->toCents();
+
+        $tx = Transaction::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->product->id,
+            'customer_number' => '081234567890',
+            'amount_cents' => 1050000,
+            'sell_price_cents' => 1050000,
+            'status' => Transaction::STATUS_SUCCESS,
+            'provider_ref' => 'REF-SUCCESS-GUARD-1',
+            'idempotency_key' => 'TX-FAIL-ON-SUCCESS',
+        ]);
+
+        // Coba failAndRefund pada transaksi yang sudah SUCCESS
+        $service->failAndRefund($tx, 'Late failure attempt');
+        $tx->refresh();
+        $wallet->refresh();
+
+        $this->assertEquals(Transaction::STATUS_SUCCESS, $tx->status);
+        $this->assertEquals($initialBalance, $wallet->balance_cents->toCents());
+        $this->assertDatabaseCount('wallet_mutations', 0);
+    }
 }
+

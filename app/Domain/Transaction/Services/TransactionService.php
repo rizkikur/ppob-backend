@@ -234,15 +234,25 @@ class TransactionService
      */
     public function markSuccess(Transaction $transaction, string $providerRef, ?array $response = null): Transaction
     {
-        $transaction->update([
-            'status' => Transaction::STATUS_SUCCESS,
-            'provider_ref' => $providerRef,
-            'provider_response' => $response,
-        ]);
+        return DB::transaction(function () use ($transaction, $providerRef, $response) {
+            /** @var Transaction $lockedTx */
+            $lockedTx = Transaction::where('id', $transaction->id)->lockForUpdate()->firstOrFail();
 
-        $this->dispatchPartnerWebhook($transaction);
+            // Guard: terminal state sudah tercapai, skip untuk mencegah double-webhook
+            if (in_array($lockedTx->status, [Transaction::STATUS_SUCCESS, Transaction::STATUS_FAILED, Transaction::STATUS_REFUNDED], true)) {
+                return $lockedTx;
+            }
 
-        return $transaction;
+            $lockedTx->update([
+                'status' => Transaction::STATUS_SUCCESS,
+                'provider_ref' => $providerRef,
+                'provider_response' => $response,
+            ]);
+
+            $this->dispatchPartnerWebhook($lockedTx);
+
+            return $lockedTx;
+        });
     }
 
     /**
@@ -250,6 +260,11 @@ class TransactionService
      */
     public function markProcessing(Transaction $transaction, ?string $providerRef = null, ?array $response = null): Transaction
     {
+        // Guard: tidak boleh transisi jika transaksi sudah di terminal state (SUCCESS, FAILED, REFUNDED)
+        if (in_array($transaction->status, [Transaction::STATUS_SUCCESS, Transaction::STATUS_FAILED, Transaction::STATUS_REFUNDED], true)) {
+            return $transaction;
+        }
+
         $transaction->update([
             'status' => Transaction::STATUS_PROCESSING,
             'provider_ref' => $providerRef ?? $transaction->provider_ref,
