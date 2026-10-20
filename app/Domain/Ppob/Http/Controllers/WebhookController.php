@@ -164,7 +164,10 @@ class WebhookController extends ApiController
 
         // Jika driver memiliki custom webhook handler
         $driverClass = $provider->driver;
-        if (class_exists($driverClass) && method_exists($driverClass, 'handleWebhook')) {
+        if ($driverClass && ! str_contains($driverClass, '\\')) {
+            $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+        }
+        if ($driverClass && class_exists($driverClass) && method_exists($driverClass, 'handleWebhook')) {
             return app($driverClass)->handleWebhook($request, $provider);
         }
 

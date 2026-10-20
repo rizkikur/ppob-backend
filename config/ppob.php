@@ -68,6 +68,13 @@ return [
         'pdam' => [
             'webhook_secret' => env('PPOB_PDAM_WEBHOOK_SECRET'),
         ],
+        'mlink' => [
+            'client_id' => env('PPOB_MLINK_CLIENT_ID', 'xymetri'),
+            'password' => env('PPOB_MLINK_PASSWORD'),
+            'secret_key' => env('PPOB_MLINK_SECRET_KEY'),
+            'api_url' => env('PPOB_MLINK_API_URL', 'https://gateway.m-link.id/json'),
+            'webhook_secret' => env('PPOB_MLINK_WEBHOOK_SECRET', 'mlink_secret_key'),
+        ],
     ],
 
     /*
@@ -120,6 +127,11 @@ return [
             'pdam' => [
                 'queue' => 'supplier_pdam',
                 'max_workers' => 20,
+                'timeout' => 60,
+            ],
+            'mlink' => [
+                'queue' => 'supplier_mlink',
+                'max_workers' => 30,
                 'timeout' => 60,
             ],
         ],

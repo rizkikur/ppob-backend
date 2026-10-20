@@ -74,6 +74,13 @@
                     <span>Vendor / Supplier</span>
                 </a>
 
+                {{-- Kamus Kode Respon (RC) --}}
+                <a href="{{ route('admin.error_mappings.index') }}"
+                   class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium {{ request()->routeIs('admin.error_mappings*') ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' }}">
+                    <svg class="w-5 h-5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/></svg>
+                    <span>Kamus Response Code</span>
+                </a>
+
                 {{-- Mitra B2B --}}
                 <a href="{{ route('admin.partners.index') }}"
                    class="flex items-center gap-3 px-3 py-2 rounded-xl text-sm font-medium {{ request()->routeIs('admin.partners*') ? 'bg-indigo-600/10 text-indigo-400 border border-indigo-500/20' : 'text-slate-300 hover:bg-slate-800/60 hover:text-white' }}">
@@ -185,24 +192,56 @@
 
             {{-- Main Body --}}
             <main id="admin-main-content" class="flex-1 p-4 sm:p-6 lg:p-8 transition-opacity duration-150">
-                {{-- Flash Notifications --}}
-                @if (session('success'))
-                    <div class="mb-6 p-4 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-sm flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/></svg>
-                            <span>{{ session('success') }}</span>
+                {{-- Global Floating Corner Toast Notifications (Auto-dismiss in 3.5s) --}}
+                <div class="fixed top-5 right-5 z-50 flex flex-col gap-2.5 max-w-sm w-[calc(100%-2.5rem)] sm:w-full pointer-events-none">
+                    @if (session('success'))
+                        <div x-data="{ show: true }"
+                             x-init="setTimeout(() => show = false, 3500)"
+                             x-show="show"
+                             x-transition:enter="transition ease-out duration-300 transform"
+                             x-transition:enter-start="opacity-0 translate-y-[-10px] sm:translate-x-[20px]"
+                             x-transition:enter-end="opacity-100 translate-y-0 sm:translate-x-0"
+                             x-transition:leave="transition ease-in duration-200 transform"
+                             x-transition:leave-start="opacity-100 translate-y-0 sm:translate-x-0"
+                             x-transition:leave-end="opacity-0 translate-y-[-10px] sm:translate-x-[20px]"
+                             class="pointer-events-auto p-3.5 rounded-2xl bg-slate-900/95 border border-emerald-500/30 text-emerald-300 shadow-2xl shadow-emerald-950/60 backdrop-blur-md flex items-start gap-3">
+                            <div class="p-1.5 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 flex-shrink-0 mt-0.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                            </div>
+                            <div class="flex-1 text-xs">
+                                <div class="font-bold text-white mb-0.5">Operasi Berhasil</div>
+                                <div class="text-slate-300 leading-relaxed">{{ session('success') }}</div>
+                            </div>
+                            <button type="button" @click="show = false" class="text-slate-400 hover:text-white p-1 rounded-lg transition-colors flex-shrink-0" title="Tutup">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
                         </div>
-                    </div>
-                @endif
+                    @endif
 
-                @if (session('error'))
-                    <div class="mb-6 p-4 rounded-2xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-sm flex items-center justify-between">
-                        <div class="flex items-center gap-3">
-                            <svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
-                            <span>{{ session('error') }}</span>
+                    @if (session('error'))
+                        <div x-data="{ show: true }"
+                             x-init="setTimeout(() => show = false, 4500)"
+                             x-show="show"
+                             x-transition:enter="transition ease-out duration-300 transform"
+                             x-transition:enter-start="opacity-0 translate-y-[-10px] sm:translate-x-[20px]"
+                             x-transition:enter-end="opacity-100 translate-y-0 sm:translate-x-0"
+                             x-transition:leave="transition ease-in duration-200 transform"
+                             x-transition:leave-start="opacity-100 translate-y-0 sm:translate-x-0"
+                             x-transition:leave-end="opacity-0 translate-y-[-10px] sm:translate-x-[20px]"
+                             class="pointer-events-auto p-3.5 rounded-2xl bg-slate-900/95 border border-rose-500/30 text-rose-300 shadow-2xl shadow-rose-950/60 backdrop-blur-md flex items-start gap-3">
+                            <div class="p-1.5 rounded-xl bg-rose-500/10 text-rose-400 border border-rose-500/20 flex-shrink-0 mt-0.5">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </div>
+                            <div class="flex-1 text-xs">
+                                <div class="font-bold text-white mb-0.5">Pemberitahuan</div>
+                                <div class="text-slate-300 leading-relaxed">{{ session('error') }}</div>
+                            </div>
+                            <button type="button" @click="show = false" class="text-slate-400 hover:text-white p-1 rounded-lg transition-colors flex-shrink-0" title="Tutup">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>
+                            </button>
                         </div>
-                    </div>
-                @endif
+                    @endif
+                </div>
 
                 {{ $slot ?? '' }}
                 @yield('content')

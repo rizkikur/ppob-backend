@@ -112,6 +112,12 @@ $adminRoute->group(function () {
             Route::post('/{provider}/ping', [AdminProviderController::class, 'ping'])->name('ping');
             Route::post('/{provider}/check-balance', [AdminProviderController::class, 'checkBalance'])->name('check_balance');
             Route::post('/{provider}/sync-products', [AdminProviderController::class, 'syncUpstreamProducts'])->name('sync_products');
+            Route::post('/{provider}/sync-existing-products', [AdminProviderController::class, 'syncExistingUpstreamProducts'])->name('sync_existing_products');
+            Route::get('/{provider}/products/preview', [AdminProviderController::class, 'previewUpstreamProducts'])->name('products.preview');
+            Route::post('/{provider}/products/import-selected', [AdminProviderController::class, 'importSelectedProducts'])->name('products.import_selected');
+            Route::post('/{provider}/products', [AdminProviderController::class, 'storeProduct'])->name('products.store');
+            Route::put('/{provider}/products/{product}', [AdminProviderController::class, 'updateProduct'])->name('products.update');
+            Route::delete('/{provider}/products/{product}', [AdminProviderController::class, 'destroyProduct'])->name('products.destroy');
             Route::post('/{provider}/error-mappings', [AdminProviderController::class, 'storeErrorMapping'])->name('error_mappings.store');
             Route::delete('/{provider}/error-mappings/{mapping}', [AdminProviderController::class, 'destroyErrorMapping'])->name('error_mappings.destroy');
             Route::post('/{provider}/toggle', [AdminProviderController::class, 'toggleStatus'])->name('toggle');
@@ -122,6 +128,19 @@ $adminRoute->group(function () {
         });
         Route::post('routing/priority', [AdminRoutingPriorityController::class, 'update'])
             ->name('routing.priority.update');
+
+        // Central Response Code & Error Mappings Dictionary
+        Route::prefix('error-mappings')->name('error_mappings.')->group(function () {
+            Route::get('/', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'index'])->name('index');
+            Route::post('/', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'store'])->name('store');
+            Route::put('/{mapping}', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'update'])->name('update');
+            Route::delete('/{mapping}', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'destroy'])->name('destroy');
+
+            // Dynamic System Response Codes (Internal PPOB Standard)
+            Route::post('/system-codes', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'storeSystemCode'])->name('system_codes.store');
+            Route::put('/system-codes/{code}', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'updateSystemCode'])->name('system_codes.update');
+            Route::delete('/system-codes/{code}', [\App\Domain\Admin\Http\Controllers\Provider\AdminErrorMappingController::class, 'destroySystemCode'])->name('system_codes.destroy');
+        });
 
         // Partners Management (B2B / H2H)
         Route::prefix('partners')->name('partners.')->group(function () {

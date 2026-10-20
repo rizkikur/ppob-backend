@@ -162,17 +162,17 @@
 
         {{-- Products Table --}}
         <div class="bg-slate-800/80 backdrop-blur-md rounded-2xl border border-slate-700/60 shadow-xl overflow-hidden">
-            <div class="overflow-x-auto">
-                <table class="w-full text-left border-collapse">
+            <div class="overflow-x-auto scrollbar-thin scrollbar-thumb-slate-700 scrollbar-track-slate-900/60">
+                <table class="w-full text-left border-collapse min-w-[980px]">
                     <thead>
                         <tr class="border-b border-slate-700/60 bg-slate-900/40 text-[11px] font-semibold text-slate-400 uppercase tracking-wider">
-                            <th class="py-3.5 px-4">SKU & Nama Produk</th>
-                            <th class="py-3.5 px-4">Kategori</th>
-                            <th class="py-3.5 px-4">Provider Utama</th>
-                            <th class="py-3.5 px-4 text-right">Modal Provider</th>
-                            <th class="py-3.5 px-4 text-center">Tipe</th>
-                            <th class="py-3.5 px-4 text-center">Status</th>
-                            <th class="py-3.5 px-4 text-right">Aksi</th>
+                            <th class="py-3.5 px-4 w-[280px] min-w-[280px]">SKU & Nama Produk</th>
+                            <th class="py-3.5 px-4 w-[140px] min-w-[140px] whitespace-nowrap">Kategori</th>
+                            <th class="py-3.5 px-4 w-[150px] min-w-[150px] whitespace-nowrap">Provider Utama</th>
+                            <th class="py-3.5 px-4 w-[140px] min-w-[140px] text-right whitespace-nowrap">Modal Provider</th>
+                            <th class="py-3.5 px-4 w-[100px] min-w-[100px] text-center whitespace-nowrap">Tipe</th>
+                            <th class="py-3.5 px-4 w-[120px] min-w-[120px] text-center whitespace-nowrap">Status</th>
+                            <th class="py-3.5 px-4 w-[110px] min-w-[110px] text-right whitespace-nowrap">Aksi</th>
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-700/40 text-sm">

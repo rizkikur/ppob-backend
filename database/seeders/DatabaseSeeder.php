@@ -13,6 +13,7 @@ class DatabaseSeeder extends Seeder
             ProductCategorySeeder::class,
             OperatorSeeder::class,
             ProviderSeeder::class,
+            MLinkProviderSeeder::class,
             ProductSeeder::class,
             ProductTierPriceSeeder::class,
             UserDemoSeeder::class,
