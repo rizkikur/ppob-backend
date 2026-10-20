@@ -17,6 +17,8 @@ use App\Domain\Wallet\Services\WalletService;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
 class AdminPartnerManagementService
@@ -34,7 +36,23 @@ class AdminPartnerManagementService
     public function getPartnersWithMetrics(array $filters = [], int $perPage = 15): LengthAwarePaginator
     {
         $query = Partner::query()
-            ->with(['user.wallet'])
+            ->select([
+                'id',
+                'user_id',
+                'name',
+                'code',
+                'api_key',
+                'protocol',
+                'response_mode',
+                'rate_limit_rpm',
+                'ip_whitelist',
+                'is_active',
+                'created_at',
+            ])
+            ->with([
+                'user' => fn ($q) => $q->select(['id', 'name', 'email']),
+                'user.wallet' => fn ($q) => $q->select(['id', 'user_id', 'balance_cents']),
+            ])
             ->withCount(['logs', 'webhookDeliveries', 'productPrices']);
 
         if (! empty($filters['search'])) {
@@ -405,5 +423,164 @@ class AdminPartnerManagementService
             changes: ['delivery_id' => $delivery->id, 'partner_id' => $delivery->partner_id],
             reason: "Manual replay webhook delivery #{$delivery->id} ke {$delivery->callback_url}"
         );
+    }
+
+    /**
+     * Add or update partner routing & failover rule (ADR-004).
+     */
+    public function addOrUpdateRoutingRule(Partner $partner, array $data, Admin $admin): \App\Domain\Partner\Models\PartnerRoutingRule
+    {
+        return DB::transaction(function () use ($partner, $data, $admin) {
+            $categoryCode = ! empty($data['category_code']) ? trim($data['category_code']) : null;
+            $allowFailover = filter_var($data['allow_failover'] ?? false, FILTER_VALIDATE_BOOLEAN);
+
+            $rule = \App\Domain\Partner\Models\PartnerRoutingRule::updateOrCreate(
+                [
+                    'partner_id' => $partner->id,
+                    'category_code' => $categoryCode,
+                ],
+                [
+                    'preferred_provider_id' => ! empty($data['preferred_provider_id']) ? (int) $data['preferred_provider_id'] : null,
+                    'allow_failover' => $allowFailover,
+                    'failover_policy' => $data['failover_policy'] ?? \App\Domain\Partner\Models\PartnerRoutingRule::POLICY_NONE,
+                ]
+            );
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'partner.routing_rule_updated',
+                target: $partner,
+                changes: [
+                    'category_code' => $categoryCode ?? 'global',
+                    'preferred_provider_id' => $rule->preferred_provider_id,
+                    'allow_failover' => $rule->allow_failover,
+                    'failover_policy' => $rule->failover_policy,
+                ],
+                reason: "Konfigurasi aturan routing & failover mitra {$partner->name} untuk kategori " . ($categoryCode ?? 'Semua Kategori (Global)')
+            );
+
+            return $rule;
+        });
+    }
+
+    /**
+     * Delete partner routing rule.
+     */
+    public function deleteRoutingRule(Partner $partner, \App\Domain\Partner\Models\PartnerRoutingRule $rule, Admin $admin): void
+    {
+        DB::transaction(function () use ($partner, $rule, $admin) {
+            $catCode = $rule->category_code ?? 'global';
+            $rule->delete();
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'partner.routing_rule_deleted',
+                target: $partner,
+                changes: ['category_code' => $catCode],
+                reason: "Hapus aturan failover kategori {$catCode} untuk mitra {$partner->name}"
+            );
+        });
+    }
+
+    /**
+     * Delete custom pricing for a SKU.
+     */
+    public function deleteCustomPricing(Partner $partner, int $productId, Admin $admin): void
+    {
+        $custom = PartnerProductPrice::where('partner_id', $partner->id)
+            ->where('product_id', $productId)
+            ->first();
+
+        if ($custom) {
+            $custom->delete();
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'partner.custom_pricing_deleted',
+                target: $partner,
+                changes: ['product_id' => $productId],
+                reason: "Hapus override harga khusus produk #{$productId} untuk mitra {$partner->name}"
+            );
+        }
+    }
+
+    /**
+     * Test ping webhook connectivity to partner callback URL.
+     */
+    public function pingWebhook(Partner $partner, Admin $admin): array
+    {
+        if (empty($partner->callback_url)) {
+            throw new \InvalidArgumentException('Mitra ini belum memiliki Callback Webhook URL.');
+        }
+
+        $payload = [
+            'event' => 'ping.test',
+            'partner_id' => $partner->id,
+            'timestamp' => now()->toIso8601String(),
+            'message' => 'PPOB Gateway Webhook Connectivity Test',
+        ];
+        $jsonPayload = json_encode($payload);
+        $secret = $partner->getCallbackSecretDecrypted() ?? '';
+        $signature = hash_hmac('sha256', $jsonPayload, $secret);
+
+        $startTime = microtime(true);
+        $statusCode = 0;
+        $responseBody = '';
+        $status = WebhookDelivery::STATUS_FAILED;
+
+        try {
+            $response = Http::timeout(5)
+                ->withHeaders([
+                    'Content-Type' => 'application/json',
+                    'User-Agent' => 'PPOB-Webhook-Client/1.0',
+                    'X-Callback-Signature' => $signature,
+                    'X-Callback-Event' => 'ping.test',
+                ])
+                ->post($partner->callback_url, $payload);
+
+            $durationMs = (int) round((microtime(true) - $startTime) * 1000);
+            $statusCode = $response->status();
+            $responseBody = Str::limit($response->body(), 1000);
+            $status = ($statusCode >= 200 && $statusCode < 300)
+                ? WebhookDelivery::STATUS_DELIVERED
+                : WebhookDelivery::STATUS_FAILED;
+        } catch (\Throwable $e) {
+            $durationMs = (int) round((microtime(true) - $startTime) * 1000);
+            $statusCode = 0;
+            $responseBody = 'Connection Exception: ' . $e->getMessage();
+            $status = WebhookDelivery::STATUS_FAILED;
+        }
+
+        // Record delivery log
+        $delivery = WebhookDelivery::create([
+            'partner_id' => $partner->id,
+            'transaction_id' => 0,
+            'attempt' => 1,
+            'status' => $status,
+            'callback_url' => $partner->callback_url,
+            'response_code' => $statusCode,
+            'response_body' => $responseBody,
+            'delivered_at' => $status === WebhookDelivery::STATUS_DELIVERED ? now() : null,
+        ]);
+
+        $this->auditLogService->log(
+            admin: $admin,
+            action: 'partner.webhook_ping_tested',
+            target: $partner,
+            changes: [
+                'status_code' => $statusCode,
+                'latency_ms' => $durationMs,
+                'status' => $status,
+            ],
+            reason: "Uji konektivitas ping webhook mitra {$partner->name} (HTTP {$statusCode}, {$durationMs}ms)"
+        );
+
+        return [
+            'success' => $status === WebhookDelivery::STATUS_DELIVERED,
+            'status_code' => $statusCode,
+            'latency_ms' => $durationMs,
+            'response_body' => $responseBody,
+            'delivery' => $delivery,
+        ];
     }
 }

@@ -32,4 +32,9 @@ class ProductCategory extends Model
     {
         return $this->hasMany(Product::class, 'category_id');
     }
+
+    public function operators(): HasMany
+    {
+        return $this->hasMany(Operator::class, 'category_id')->orderBy('sort_order', 'asc');
+    }
 }

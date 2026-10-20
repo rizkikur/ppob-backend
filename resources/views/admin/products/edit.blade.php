@@ -107,6 +107,21 @@
                         </select>
                     </div>
 
+                    {{-- Operator / Brand --}}
+                    <div>
+                        <label for="operator_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
+                            Operator / Brand
+                        </label>
+                        <select id="operator_id"
+                                name="operator_id"
+                                class="w-full bg-slate-900/80 border border-slate-700/80 rounded-xl px-3.5 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500">
+                            <option value="">-- Pilih Operator / Brand (Opsional) --</option>
+                            @foreach($operators as $op)
+                                <option value="{{ $op->id }}" @selected(old('operator_id', $product->operator_id) == $op->id)>{{ $op->name }} ({{ $op->code }})</option>
+                            @endforeach
+                        </select>
+                    </div>
+
                     {{-- Provider --}}
                     <div>
                         <label for="provider_id" class="block text-xs font-semibold text-slate-300 uppercase tracking-wider mb-1.5">
@@ -151,12 +166,20 @@
                     </div>
                 </div>
 
-                <div class="flex items-center justify-between pt-3 border-t border-slate-700/60">
-                    <label class="relative inline-flex items-center cursor-pointer">
-                        <input type="checkbox" name="is_active" value="1" class="sr-only peer" @checked(old('is_active', $product->is_active))>
-                        <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
-                        <span class="ml-3 text-xs font-semibold text-slate-200">Status Produk Aktif</span>
-                    </label>
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-slate-700/60">
+                    <div class="flex flex-wrap items-center gap-6">
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" name="is_active" value="1" class="sr-only peer" @checked(old('is_active', $product->is_active))>
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-emerald-600"></div>
+                            <span class="ml-3 text-xs font-semibold text-slate-200">Status Produk Aktif</span>
+                        </label>
+
+                        <label class="relative inline-flex items-center cursor-pointer" title="Jika dinonaktifkan, transaksi langsung ditolak jika provider utama gangguan dan tidak dialihkan ke supplier backup">
+                            <input type="checkbox" name="allow_failover" value="1" class="sr-only peer" @checked(old('allow_failover', $product->allow_failover))>
+                            <div class="w-11 h-6 bg-slate-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                            <span class="ml-3 text-xs font-semibold text-slate-200">Izinkan Failover Supplier</span>
+                        </label>
+                    </div>
 
                     <button type="submit"
                             class="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-lg shadow-indigo-600/30 transition-all">

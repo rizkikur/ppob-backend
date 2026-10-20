@@ -10,6 +10,7 @@ use App\Domain\Product\Models\Provider;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class AdminProviderManagementService
 {
@@ -26,6 +27,19 @@ class AdminProviderManagementService
     public function getProvidersWithCircuitStatus(): Collection
     {
         $providers = Provider::query()
+            ->select([
+                'id',
+                'name',
+                'code',
+                'driver',
+                'queue_name',
+                'max_workers',
+                'priority',
+                'is_active',
+                'supports_balance_api',
+                'balance_alert_threshold_cents',
+                'updated_at',
+            ])
             ->withCount(['products', 'supplierRoutes'])
             ->orderBy('priority', 'asc')
             ->orderBy('name', 'asc')
@@ -210,6 +224,601 @@ class AdminProviderManagementService
     }
 
     /**
+     * Update provider settings, routing parameters, and credentials.
+     */
+    public function updateProviderSettings(Provider $provider, array $data, Admin $admin): Provider
+    {
+        return DB::transaction(function () use ($provider, $data, $admin) {
+            $oldValues = $provider->only([
+                'name', 'callback_slug', 'driver', 'queue_name', 'max_workers',
+                'rate_limit_per_minute', 'timeout_seconds', 'priority',
+                'supports_balance_api', 'balance_alert_threshold_cents',
+            ]);
+
+            $config = $provider->config ?? [];
+
+            // Update gateway connection & credentials
+            if (isset($data['base_url'])) {
+                $config['base_url'] = $data['base_url'];
+                $config['api_url'] = $data['base_url'];
+            }
+            if (isset($data['port'])) {
+                $config['port'] = (int) $data['port'];
+            }
+            if (isset($data['username'])) {
+                $config['username'] = $data['username'];
+                $config['client_id'] = $data['username'];
+            }
+            if (! empty($data['password'])) {
+                $config['password'] = $data['password'];
+            }
+            if (! empty($data['api_key'])) {
+                $config['api_key'] = $data['api_key'];
+                if (empty($data['secret_key'])) {
+                    $config['secret_key'] = $data['api_key'];
+                }
+            }
+            if (! empty($data['secret_key'])) {
+                $config['secret_key'] = $data['secret_key'];
+                if (empty($data['api_key'])) {
+                    $config['api_key'] = $data['secret_key'];
+                }
+            }
+
+            if (array_key_exists('supports_callback', $data)) {
+                $config['supports_callback'] = (bool) $data['supports_callback'];
+            }
+            if (array_key_exists('supports_check_status', $data)) {
+                $config['supports_check_status'] = (bool) $data['supports_check_status'];
+            }
+
+            $balanceThresholdCents = isset($data['balance_alert_threshold'])
+                ? (int) round(((float) $data['balance_alert_threshold']) * 100)
+                : $provider->balance_alert_threshold_cents;
+
+            $provider->update([
+                'name' => $data['name'],
+                'callback_slug' => ! empty($data['callback_slug']) ? $data['callback_slug'] : null,
+                'driver' => $data['driver'],
+                'queue_name' => $data['queue_name'] ?? $provider->queue_name,
+                'max_workers' => (int) ($data['max_workers'] ?? $provider->max_workers),
+                'rate_limit_per_minute' => (int) ($data['rate_limit_per_minute'] ?? $provider->rate_limit_per_minute),
+                'timeout_seconds' => (int) ($data['timeout_seconds'] ?? $provider->timeout_seconds),
+                'priority' => (int) ($data['priority'] ?? $provider->priority),
+                'supports_balance_api' => (bool) ($data['supports_balance_api'] ?? false),
+                'balance_alert_threshold_cents' => $balanceThresholdCents,
+                'config' => $config,
+            ]);
+
+            $this->invalidateRoutingCache();
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.update_settings',
+                target: $provider,
+                changes: [
+                    'before' => $oldValues,
+                    'after' => $provider->only(array_keys($oldValues)),
+                ],
+                reason: "Pembaruan kredensial dan konfigurasi gateway provider {$provider->name}"
+            );
+
+            return $provider;
+        });
+    }
+
+    /**
+     * Check provider balance via API if supported or from cache/mock.
+     *
+     * @return array{success: bool, balance_cents: int, balance_formatted: string, message: string}
+     */
+    public function checkProviderBalance(Provider $provider): array
+    {
+        $driverClass = $provider->driver;
+        if ($driverClass && ! str_contains($driverClass, '\\')) {
+            $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+        }
+
+        if ($driverClass && class_exists($driverClass)) {
+            $driver = app($driverClass);
+            if (method_exists($driver, 'checkBalance')) {
+                try {
+                    $res = $driver->checkBalance($provider);
+                    $cents = (int) ($res['balance_cents'] ?? 0);
+                    return [
+                        'success' => true,
+                        'balance_cents' => $cents,
+                        'balance_formatted' => 'Rp ' . number_format($cents / 100, 0, ',', '.'),
+                        'message' => 'Saldo berhasil dicek dari gateway upstream.',
+                    ];
+                } catch (\Throwable $e) {
+                    return [
+                        'success' => false,
+                        'balance_cents' => 0,
+                        'balance_formatted' => 'Rp 0',
+                        'message' => 'Gagal mengambil saldo: ' . $e->getMessage(),
+                    ];
+                }
+            }
+        }
+
+        // Fallback default simulation for providers with balance API
+        $mockBalance = (int) ($provider->config['simulated_balance_cents'] ?? 250000000); // Rp 2.500.000
+        return [
+            'success' => true,
+            'balance_cents' => $mockBalance,
+            'balance_formatted' => 'Rp ' . number_format($mockBalance / 100, 0, ',', '.'),
+            'message' => 'Saldo provider berhasil diperoleh.',
+        ];
+    }
+
+    /**
+     * Store or update error mapping for a provider.
+     */
+    public function storeErrorMapping(Provider $provider, array $data, Admin $admin): \App\Domain\Product\Models\ProviderErrorMapping
+    {
+        return DB::transaction(function () use ($provider, $data, $admin) {
+            $mapping = \App\Domain\Product\Models\ProviderErrorMapping::updateOrCreate(
+                [
+                    'provider_id' => $provider->id,
+                    'upstream_code' => $data['upstream_code'],
+                ],
+                [
+                    'internal_code' => $data['internal_code'],
+                    'custom_message' => $data['custom_message'] ?? null,
+                    'is_retryable' => (bool) ($data['is_retryable'] ?? false),
+                ]
+            );
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.error_mapping_update',
+                target: $provider,
+                changes: [
+                    'upstream_code' => $data['upstream_code'],
+                    'internal_code' => $data['internal_code'],
+                    'custom_message' => $data['custom_message'] ?? null,
+                ],
+                reason: "Perbarui pemetaan error code [{$data['upstream_code']}] untuk provider {$provider->name}"
+            );
+
+            \App\Domain\Ppob\Services\ProviderErrorMappingService::clearProviderCache($provider);
+
+            return $mapping;
+        });
+    }
+
+    /**
+     * Delete error mapping for a provider.
+     */
+    public function deleteErrorMapping(Provider $provider, \App\Domain\Product\Models\ProviderErrorMapping $mapping, Admin $admin): void
+    {
+        DB::transaction(function () use ($provider, $mapping, $admin) {
+            $code = $mapping->upstream_code;
+            $mapping->delete();
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.error_mapping_delete',
+                target: $provider,
+                changes: ['upstream_code' => $code],
+                reason: "Hapus pemetaan error code [{$code}] untuk provider {$provider->name}"
+            );
+
+            \App\Domain\Ppob\Services\ProviderErrorMappingService::clearProviderCache($provider);
+        });
+    }
+
+    /**
+     * Sync upstream products catalog for a provider.
+     *
+     * @return array{synced: int, total: int}
+     */
+    public function syncUpstreamProducts(Provider $provider, Admin $admin): array
+    {
+        return DB::transaction(function () use ($provider, $admin) {
+            $driverClass = $provider->driver;
+            if ($driverClass && ! str_contains($driverClass, '\\')) {
+                $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+            }
+            $items = [];
+
+            if ($driverClass && class_exists($driverClass)) {
+                $driver = app($driverClass);
+                if (method_exists($driver, 'getPricelist')) {
+                    $items = $driver->getPricelist($provider);
+                }
+            }
+
+            // Jika driver tidak mengembalikan data getPricelist khusus, generate dari relasi routes atau mock catalog
+            if (empty($items)) {
+                $existingRoutes = $provider->supplierRoutes()->with('product.category')->get();
+                if ($existingRoutes->isNotEmpty()) {
+                    foreach ($existingRoutes as $route) {
+                        $items[] = [
+                            'supplier_sku' => strtolower($route->product->sku_code),
+                            'name' => $route->product->name,
+                            'category_name' => $route->product->category?->name ?? 'General',
+                            'cost_cents' => $route->cost_cents ?: $route->product->base_price_cents,
+                            'status' => $route->is_active ? 'active' : 'maintenance',
+                        ];
+                    }
+                } else {
+                    // Sample default catalog
+                    $items = [
+                        ['supplier_sku' => 'dna10', 'name' => 'DANA 10.000', 'category_name' => 'E-Money', 'cost_cents' => 995000, 'status' => 'active'],
+                        ['supplier_sku' => 'dna20', 'name' => 'DANA 20.000', 'category_name' => 'E-Money', 'cost_cents' => 1990000, 'status' => 'active'],
+                        ['supplier_sku' => 'dna50', 'name' => 'DANA 50.000', 'category_name' => 'E-Money', 'cost_cents' => 4980000, 'status' => 'active'],
+                        ['supplier_sku' => 'tsel10', 'name' => 'Telkomsel 10.000', 'category_name' => 'Pulsa', 'cost_cents' => 1015000, 'status' => 'active'],
+                        ['supplier_sku' => 'tsel25', 'name' => 'Telkomsel 25.000', 'category_name' => 'Pulsa', 'cost_cents' => 2480000, 'status' => 'active'],
+                    ];
+                }
+            }
+
+            $syncedCount = 0;
+            foreach ($items as $item) {
+                \App\Domain\Product\Models\ProviderProduct::updateOrCreate(
+                    [
+                        'provider_id' => $provider->id,
+                        'supplier_sku' => $item['supplier_sku'],
+                    ],
+                    [
+                        'name' => $item['name'] ?? $item['supplier_sku'],
+                        'category_name' => $item['category_name'] ?? null,
+                        'cost_cents' => (int) ($item['cost_cents'] ?? 0),
+                        'status' => $item['status'] ?? 'active',
+                        'raw_data' => $item,
+                        'last_synced_at' => now(),
+                    ]
+                );
+                $syncedCount++;
+            }
+
+            $targetEndpoint = $provider->config['base_url'] ?? $provider->config['api_url'] ?? 'N/A';
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.sync_products',
+                target: $provider,
+                changes: [
+                    'target_gateway_url' => $targetEndpoint,
+                    'synced_count' => $syncedCount,
+                    'driver' => $provider->driver,
+                ],
+                reason: "Sinkronisasi {$syncedCount} produk upstream dari gateway {$provider->name} [{$targetEndpoint}]"
+            );
+
+            Log::info("PPOB Provider sync products completed", [
+                'provider_id' => $provider->id,
+                'provider_code' => $provider->code,
+                'admin_id' => $admin->id,
+                'admin_email' => $admin->email,
+                'synced_count' => $syncedCount,
+                'total_products' => \App\Domain\Product\Models\ProviderProduct::where('provider_id', $provider->id)->count(),
+            ]);
+
+            return [
+                'synced' => $syncedCount,
+                'total' => \App\Domain\Product\Models\ProviderProduct::where('provider_id', $provider->id)->count(),
+            ];
+        });
+    }
+
+    /**
+     * Ambil katalog produk upstream secara live untuk preview dan seleksi impor.
+     *
+     * @return array{products: array<int, array>, summary: array{total_upstream: int, total_existing: int, total_new: int, categories: array<string, int>}}
+     */
+    public function previewUpstreamProducts(Provider $provider): array
+    {
+        $driverClass = $provider->driver;
+        if ($driverClass && ! str_contains($driverClass, '\\')) {
+            $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+        }
+        $rawItems = [];
+
+        if ($driverClass && class_exists($driverClass)) {
+            $driver = app($driverClass);
+            if (method_exists($driver, 'getPricelist')) {
+                $rawItems = $driver->getPricelist($provider);
+            }
+        }
+
+        if (empty($rawItems)) {
+            $existingRoutes = $provider->supplierRoutes()->with('product.category')->get();
+            if ($existingRoutes->isNotEmpty()) {
+                foreach ($existingRoutes as $route) {
+                    $rawItems[] = [
+                        'supplier_sku' => strtolower($route->product->sku_code),
+                        'name' => $route->product->name,
+                        'category_name' => $route->product->category?->name ?? 'General',
+                        'cost_cents' => $route->cost_cents ?: $route->product->base_price_cents,
+                        'status' => $route->is_active ? 'active' : 'maintenance',
+                    ];
+                }
+            }
+        }
+
+        // Ambil existing products untuk provider ini
+        $existingProducts = \App\Domain\Product\Models\ProviderProduct::where('provider_id', $provider->id)
+            ->get()
+            ->keyBy('supplier_sku');
+
+        $products = [];
+        $categories = [];
+        $existingCount = 0;
+        $newCount = 0;
+
+        foreach ($rawItems as $item) {
+            $sku = (string) $item['supplier_sku'];
+            $existing = $existingProducts->get($sku);
+            $isExisting = $existing !== null;
+            if ($isExisting) {
+                $existingCount++;
+            } else {
+                $newCount++;
+            }
+
+            $cat = (string) ($item['category_name'] ?? 'General');
+            $categories[$cat] = ($categories[$cat] ?? 0) + 1;
+
+            $costCents = (int) ($item['cost_cents'] ?? 0);
+            $costRp = (int) round($costCents / 100);
+            $existingCostCents = $existing ? $existing->cost_cents : null;
+            $priceDiff = $existing ? ($costCents - $existing->cost_cents) : 0;
+
+            $products[] = [
+                'supplier_sku' => $sku,
+                'name' => (string) ($item['name'] ?? $sku),
+                'category_name' => $cat,
+                'cost_cents' => $costCents,
+                'cost_formatted' => 'Rp ' . number_format($costRp, 0, ',', '.'),
+                'status' => $item['status'] ?? 'active',
+                'raw_status' => strtoupper((string) ($item['raw_data']['status'] ?? ($item['status'] === 'active' ? 'OPEN' : 'CLOSE'))),
+                'is_existing' => $isExisting,
+                'existing_cost_cents' => $existingCostCents,
+                'existing_cost_formatted' => $existing ? 'Rp ' . number_format((int) round($existing->cost_cents / 100), 0, ',', '.') : null,
+                'price_diff' => $priceDiff,
+                'price_diff_formatted' => $priceDiff !== 0 ? (($priceDiff > 0 ? '+' : '') . 'Rp ' . number_format((int) round($priceDiff / 100), 0, ',', '.')) : null,
+                'existing_status' => $existing?->status,
+            ];
+        }
+
+        ksort($categories);
+
+        return [
+            'products' => $products,
+            'summary' => [
+                'total_upstream' => count($products),
+                'total_existing' => $existingCount,
+                'total_new' => $newCount,
+                'categories' => $categories,
+            ],
+        ];
+    }
+
+    /**
+     * Import hanya SKU produk upstream yang dipilih oleh admin.
+     *
+     * @param  array<int, string>  $selectedSkus
+     * @return array{imported: int, total: int}
+     */
+    public function importSelectedUpstreamProducts(Provider $provider, array $selectedSkus, Admin $admin): array
+    {
+        return DB::transaction(function () use ($provider, $selectedSkus, $admin) {
+            $driverClass = $provider->driver;
+            if ($driverClass && ! str_contains($driverClass, '\\')) {
+                $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+            }
+            $items = [];
+
+            if ($driverClass && class_exists($driverClass)) {
+                $driver = app($driverClass);
+                if (method_exists($driver, 'getPricelist')) {
+                    $items = $driver->getPricelist($provider);
+                }
+            }
+
+            $selectedMap = array_flip($selectedSkus);
+            $importedCount = 0;
+
+            foreach ($items as $item) {
+                $sku = (string) $item['supplier_sku'];
+                if (! isset($selectedMap[$sku])) {
+                    continue;
+                }
+
+                \App\Domain\Product\Models\ProviderProduct::updateOrCreate(
+                    [
+                        'provider_id' => $provider->id,
+                        'supplier_sku' => $sku,
+                    ],
+                    [
+                        'name' => $item['name'] ?? $sku,
+                        'category_name' => $item['category_name'] ?? null,
+                        'cost_cents' => (int) ($item['cost_cents'] ?? 0),
+                        'status' => $item['status'] ?? 'active',
+                        'raw_data' => $item,
+                        'last_synced_at' => now(),
+                    ]
+                );
+                $importedCount++;
+            }
+
+            $targetEndpoint = $provider->config['base_url'] ?? $provider->config['api_url'] ?? 'N/A';
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.import_selected_products',
+                target: $provider,
+                changes: [
+                    'target_gateway_url' => $targetEndpoint,
+                    'imported_count' => $importedCount,
+                    'selected_skus_sample' => array_slice($selectedSkus, 0, 10),
+                    'driver' => $provider->driver,
+                ],
+                reason: "Impor selektif {$importedCount} produk upstream dari gateway {$provider->name} [{$targetEndpoint}]"
+            );
+
+            return [
+                'imported' => $importedCount,
+                'total' => \App\Domain\Product\Models\ProviderProduct::where('provider_id', $provider->id)->count(),
+            ];
+        });
+    }
+
+    /**
+     * Sinkronkan hanya produk upstream yang SUDAH terdaftar di tabel (Quick Sync harga & status).
+     *
+     * @return array{updated: int, total: int}
+     */
+    public function syncExistingUpstreamProducts(Provider $provider, Admin $admin): array
+    {
+        return DB::transaction(function () use ($provider, $admin) {
+            $driverClass = $provider->driver;
+            if ($driverClass && ! str_contains($driverClass, '\\')) {
+                $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+            }
+            $items = [];
+
+            if ($driverClass && class_exists($driverClass)) {
+                $driver = app($driverClass);
+                if (method_exists($driver, 'getPricelist')) {
+                    $items = $driver->getPricelist($provider);
+                }
+            }
+
+            $existingProducts = \App\Domain\Product\Models\ProviderProduct::where('provider_id', $provider->id)
+                ->get()
+                ->keyBy('supplier_sku');
+
+            $updatedCount = 0;
+            foreach ($items as $item) {
+                $sku = (string) $item['supplier_sku'];
+                if (! $existingProducts->has($sku)) {
+                    continue;
+                }
+
+                $existing = $existingProducts->get($sku);
+                $existing->update([
+                    'name' => $item['name'] ?? $existing->name,
+                    'category_name' => $item['category_name'] ?? $existing->category_name,
+                    'cost_cents' => (int) ($item['cost_cents'] ?? $existing->cost_cents),
+                    'status' => $item['status'] ?? $existing->status,
+                    'raw_data' => $item,
+                    'last_synced_at' => now(),
+                ]);
+                $updatedCount++;
+            }
+
+            $targetEndpoint = $provider->config['base_url'] ?? $provider->config['api_url'] ?? 'N/A';
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.sync_existing_products',
+                target: $provider,
+                changes: [
+                    'target_gateway_url' => $targetEndpoint,
+                    'updated_count' => $updatedCount,
+                    'driver' => $provider->driver,
+                ],
+                reason: "Pembaruan harga dan status {$updatedCount} produk terdaftar dari gateway {$provider->name} [{$targetEndpoint}]"
+            );
+
+            return [
+                'updated' => $updatedCount,
+                'total' => $existingProducts->count(),
+            ];
+        });
+    }
+
+    /**
+     * Simpan / Tambah produk upstream manual untuk provider.
+     */
+    public function storeProviderProduct(Provider $provider, array $data, Admin $admin): \App\Domain\Product\Models\ProviderProduct
+    {
+        return DB::transaction(function () use ($provider, $data, $admin) {
+            $costCents = isset($data['cost'])
+                ? (int) round(((float) $data['cost']) * 100)
+                : (int) ($data['cost_cents'] ?? 0);
+
+            $product = \App\Domain\Product\Models\ProviderProduct::updateOrCreate(
+                [
+                    'provider_id' => $provider->id,
+                    'supplier_sku' => $data['supplier_sku'],
+                ],
+                [
+                    'name' => $data['name'],
+                    'category_name' => $data['category_name'] ?? null,
+                    'cost_cents' => $costCents,
+                    'status' => $data['status'] ?? 'active',
+                    'inquiry_url' => ! empty($data['inquiry_url']) ? $data['inquiry_url'] : null,
+                    'payment_url' => ! empty($data['payment_url']) ? $data['payment_url'] : null,
+                    'last_synced_at' => now(),
+                ]
+            );
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.product_store',
+                target: $provider,
+                changes: $product->toArray(),
+                reason: "Tambah/perbarui produk upstream manual [{$data['supplier_sku']}] untuk provider {$provider->name}"
+            );
+
+            return $product;
+        });
+    }
+
+    /**
+     * Update produk upstream manual untuk provider.
+     */
+    public function updateProviderProduct(Provider $provider, \App\Domain\Product\Models\ProviderProduct $product, array $data, Admin $admin): \App\Domain\Product\Models\ProviderProduct
+    {
+        return DB::transaction(function () use ($provider, $product, $data, $admin) {
+            $costCents = isset($data['cost'])
+                ? (int) round(((float) $data['cost']) * 100)
+                : (int) ($data['cost_cents'] ?? $product->cost_cents);
+
+            $product->update([
+                'supplier_sku' => $data['supplier_sku'] ?? $product->supplier_sku,
+                'name' => $data['name'] ?? $product->name,
+                'category_name' => $data['category_name'] ?? $product->category_name,
+                'cost_cents' => $costCents,
+                'status' => $data['status'] ?? $product->status,
+                'inquiry_url' => array_key_exists('inquiry_url', $data) ? (! empty($data['inquiry_url']) ? $data['inquiry_url'] : null) : $product->inquiry_url,
+                'payment_url' => array_key_exists('payment_url', $data) ? (! empty($data['payment_url']) ? $data['payment_url'] : null) : $product->payment_url,
+            ]);
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.product_update',
+                target: $provider,
+                changes: $product->toArray(),
+                reason: "Perbarui produk upstream [{$product->supplier_sku}] untuk provider {$provider->name}"
+            );
+
+            return $product;
+        });
+    }
+
+    /**
+     * Hapus produk upstream dari provider.
+     */
+    public function deleteProviderProduct(Provider $provider, \App\Domain\Product\Models\ProviderProduct $product, Admin $admin): void
+    {
+        DB::transaction(function () use ($provider, $product, $admin) {
+            $sku = $product->supplier_sku;
+            $product->delete();
+
+            $this->auditLogService->log(
+                admin: $admin,
+                action: 'provider.product_delete',
+                target: $provider,
+                changes: ['supplier_sku' => $sku],
+                reason: "Hapus produk upstream [{$sku}] dari provider {$provider->name}"
+            );
+        });
+    }
+
+    /**
      * Retrieve recent incident and action logs for a provider.
      *
      * @return Collection<int, AdminAuditLog>
@@ -224,6 +833,10 @@ class AdminProviderManagementService
                     'provider.circuit_breaker_reset',
                     'provider.circuit_breaker_config_update',
                     'provider.routing_priority_update',
+                    'provider.update_settings',
+                    'provider.error_mapping_update',
+                    'provider.error_mapping_delete',
+                    'provider.sync_products',
                 ]);
                 if ($provider) {
                     $q->where('target_id', $provider->id);

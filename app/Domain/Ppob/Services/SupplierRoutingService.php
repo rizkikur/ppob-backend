@@ -30,7 +30,7 @@ class SupplierRoutingService
      *
      * @throws BusinessException jika tidak ada supplier yang tersedia
      */
-    public function resolve(Product $product, ?Partner $partner = null): ResolvedRoute
+    public function resolve(Product $product, ?Partner $partner = null, ?\App\Domain\Shared\ValueObjects\Money $maxAllowedCost = null): ResolvedRoute
     {
         $product->loadMissing(['provider', 'category']);
 
@@ -76,34 +76,64 @@ class SupplierRoutingService
         // 4. Periksa ketersediaan preferred provider (status aktif & circuit breaker)
         if ($this->isProviderAvailable($preferredProvider)) {
             $queueName = $preferredProvider->queue_name ?: 'transactions';
+            $route = ProductSupplierRoute::where('product_id', $product->id)
+                ->where('provider_id', $preferredProvider->id)
+                ->first();
 
             return new ResolvedRoute(
                 provider: $preferredProvider,
                 originalProvider: $originalSupplier,
                 isFailover: false,
-                queueName: $queueName
+                queueName: $queueName,
+                supplierSku: $route?->supplier_sku ?: $product->sku_code,
+                costCents: $route?->cost_cents ?: $product->base_price_cents?->toCents()
             );
         }
 
         // 5. Preferred provider unavailable — evaluasi apakah boleh failover
-        if (! $allowFailover || $failoverPolicy === PartnerRoutingRule::POLICY_NONE) {
+        // Guard 1: Toggle per-produk (Point 1 user request)
+        // Guard 2: Kebijakan klien / mitra (ADR-004)
+        if ($product->allow_failover === false || ! $allowFailover || $failoverPolicy === PartnerRoutingRule::POLICY_NONE) {
+            try {
+                app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyRoutingExhausted(
+                    $product->sku_code,
+                    $product->name,
+                    $preferredProvider->name,
+                    'Failover dinonaktifkan oleh kebijakan produk atau preferensi klien.'
+                );
+            } catch (\Throwable) {}
+
             throw BusinessException::providerUnavailable($preferredProvider->name);
         }
 
-        // 6. Cari provider backup sesuai failover policy
-        $backupProvider = $this->resolveBackupProvider($product, $candidates, $preferredProvider, $failoverPolicy);
+        // 6. Cari provider backup sesuai failover policy dengan Anti-Loss / Negative Margin Guard (Point 2 user request)
+        $backupProvider = $this->resolveBackupProvider($product, $candidates, $preferredProvider, $failoverPolicy, $maxAllowedCost);
 
         if (! $backupProvider) {
+            try {
+                app(\App\Domain\Shared\Services\OperationalAlertService::class)->notifyRoutingExhausted(
+                    $product->sku_code,
+                    $product->name,
+                    $preferredProvider->name,
+                    'Seluruh supplier cadangan/failover tidak tersedia atau biaya melebihi harga jual.'
+                );
+            } catch (\Throwable) {}
+
             throw BusinessException::providerUnavailable($preferredProvider->name);
         }
 
         $queueName = $backupProvider->queue_name ?: 'transactions';
+        $backupRoute = ProductSupplierRoute::where('product_id', $product->id)
+            ->where('provider_id', $backupProvider->id)
+            ->first();
 
         return new ResolvedRoute(
             provider: $backupProvider,
             originalProvider: $originalSupplier,
             isFailover: true,
-            queueName: $queueName
+            queueName: $queueName,
+            supplierSku: $backupRoute?->supplier_sku ?: $product->sku_code,
+            costCents: $backupRoute?->cost_cents ?: $product->base_price_cents?->toCents()
         );
     }
 
@@ -121,12 +151,21 @@ class SupplierRoutingService
             ->get();
 
         $providers = $routes
-            ->map(fn (ProductSupplierRoute $route) => $route->provider)
+            ->map(function (ProductSupplierRoute $route) {
+                if ($route->provider) {
+                    $route->provider->route_cost_cents = $route->cost_cents;
+                }
+
+                return $route->provider;
+            })
             ->filter(fn (?Provider $provider) => $provider && $provider->is_active);
 
         // Jika belum ada pemetaan di product_supplier_routes, gunakan provider default produk
         if ($providers->isEmpty() && $product->provider && $product->provider->is_active) {
-            return collect([$product->provider]);
+            $defaultProvider = $product->provider;
+            $defaultProvider->route_cost_cents = $product->base_price_cents?->toCents();
+
+            return collect([$defaultProvider]);
         }
 
         return $providers->values();
@@ -156,6 +195,7 @@ class SupplierRoutingService
 
     /**
      * Cari provider backup yang tersedia berdasarkan failover policy.
+     * Mengimplementasikan Anti-Negative Margin Guard: menolak supplier backup jika modal > harga jual kita.
      *
      * @param  Collection<int, Provider>  $candidates
      */
@@ -163,12 +203,20 @@ class SupplierRoutingService
         Product $product,
         Collection $candidates,
         Provider $failedProvider,
-        string $policy
+        string $policy,
+        ?\App\Domain\Shared\ValueObjects\Money $maxAllowedCost = null
     ): ?Provider {
         // Kandidat dari rute produk yang berbeda dengan supplier yang gagal
         $remainingCandidates = $candidates->reject(fn (Provider $p) => $p->id === $failedProvider->id);
 
         foreach ($remainingCandidates as $candidate) {
+            // Anti-Loss / Negative Margin Guard: jangan failover jika modal supplier backup > harga jual kita
+            if ($maxAllowedCost !== null && isset($candidate->route_cost_cents) && $candidate->route_cost_cents !== null) {
+                if ($candidate->route_cost_cents > $maxAllowedCost->toCents()) {
+                    continue;
+                }
+            }
+
             if ($this->isProviderAvailable($candidate)) {
                 return $candidate;
             }

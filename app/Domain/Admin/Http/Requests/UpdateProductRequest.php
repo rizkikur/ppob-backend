@@ -22,6 +22,7 @@ class UpdateProductRequest extends FormRequest
         return [
             'provider_id' => ['required', 'integer', 'exists:providers,id'],
             'category_id' => ['required', 'integer', 'exists:product_categories,id'],
+            'operator_id' => ['nullable', 'integer', 'exists:operators,id'],
             'sku_code' => ['required', 'string', 'max:50', Rule::unique('products', 'sku_code')->ignore($productId)],
             'name' => ['required', 'string', 'max:100'],
             'description' => ['nullable', 'string', 'max:500'],
@@ -29,6 +30,7 @@ class UpdateProductRequest extends FormRequest
             'base_price_rupiah' => ['required', 'numeric', 'min:0'],
             'admin_fee_rupiah' => ['nullable', 'numeric', 'min:0'],
             'is_active' => ['nullable', 'boolean'],
+            'allow_failover' => ['nullable', 'boolean'],
         ];
     }
 

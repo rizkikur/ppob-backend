@@ -220,4 +220,37 @@ class TopupWebhookTest extends TestCase
         $this->topupService->confirmManual($topup, $this->admin);
         $this->assertEquals(2500000, $this->walletService->getBalance($this->user)->toCents());
     }
+
+    /**
+     * Webhook pembayaran tidak mengkredit top-up yang sudah kadaluarsa atau berstatus gagal.
+     */
+    public function test_webhook_does_not_credit_failed_or_expired_topup(): void
+    {
+        $topup = $this->topupService->createTopup(
+            $this->user,
+            Money::fromCents(5000000), // Rp 50.000,00
+            'payment_gateway',
+            'fake',
+            'TOPUP-EXPIRED-TEST-001'
+        );
+
+        // Ubah status ke expired
+        $topup->update(['status' => TopupRequest::STATUS_EXPIRED]);
+
+        $initialBalance = $this->walletService->getBalance($this->user)->toCents();
+
+        // Webhook late settlement masuk
+        $this->postJson('/wallet/callback', [
+            'gateway' => 'fake',
+            'gateway_ref' => $topup->gateway_ref,
+            'status' => 'paid',
+        ], ['X-Signature' => 'valid-signature'])->assertStatus(200);
+
+        // Status tetap EXPIRED dan saldo tidak bertambah
+        $topup->refresh();
+        $this->assertEquals(TopupRequest::STATUS_EXPIRED, $topup->status);
+        $this->assertEquals($initialBalance, $this->walletService->getBalance($this->user)->toCents());
+        $this->assertEquals(0, WalletMutation::where('reference_type', WalletMutation::REF_TOPUP)->where('reference_id', $topup->id)->count());
+    }
 }
+

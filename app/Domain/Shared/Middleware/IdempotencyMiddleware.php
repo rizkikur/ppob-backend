@@ -67,15 +67,20 @@ class IdempotencyMiddleware
 
         // Simpan response ke tabel idempotency_keys (hanya untuk status 2xx)
         if ($response->getStatusCode() >= 200 && $response->getStatusCode() < 300) {
-            $decodedBody = json_decode($response->getContent(), true);
+            try {
+                $decodedBody = json_decode($response->getContent(), true);
 
-            IdempotencyKey::create([
-                'user_id' => $userId,
-                'key_value' => $key,
-                'endpoint' => $request->path(),
-                'response_code' => $response->getStatusCode(),
-                'response_body' => $decodedBody ?? $response->getContent(),
-            ]);
+                IdempotencyKey::create([
+                    'user_id' => $userId,
+                    'key_value' => $key,
+                    'endpoint' => $request->path(),
+                    'response_code' => $response->getStatusCode(),
+                    'response_body' => $decodedBody ?? $response->getContent(),
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                // UNIQUE constraint violation dari concurrent request — response tetap valid
+                // Transaksi sudah diproses oleh request pertama, abaikan duplikat
+            }
         }
 
         return $response;

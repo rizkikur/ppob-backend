@@ -23,11 +23,19 @@ use Illuminate\Http\Request;
  */
 class WebhookController extends ApiController
 {
+    protected ?TopupService $topupService;
+    protected ?PpobService $ppobService;
+    protected ?TransactionService $transactionService;
+
     public function __construct(
-        private readonly ?TopupService $topupService = null,
-        private readonly ?PpobService $ppobService = null,
-        private readonly ?TransactionService $transactionService = null
-    ) {}
+        ?TopupService $topupService = null,
+        ?PpobService $ppobService = null,
+        ?TransactionService $transactionService = null
+    ) {
+        $this->topupService = $topupService;
+        $this->ppobService = $ppobService;
+        $this->transactionService = $transactionService;
+    }
 
     public function ppobCallback(Request $request): JsonResponse
     {
@@ -95,11 +103,14 @@ class WebhookController extends ApiController
             $txService = $this->transactionService ?? app(TransactionService::class);
             $status = strtolower((string) ($request->input('status') ?? ''));
 
-            if (in_array($status, ['success', 'paid', 'settlement', 'completed'], true)) {
-                $txService->markSuccess($tx, (string) ($providerRef ?? $tx->provider_ref), $request->all());
-            } elseif (in_array($status, ['failed', 'failure', 'expired', 'cancelled'], true)) {
-                $reason = $request->input('failure_reason') ?? $request->input('message') ?? 'Provider webhook reported failure';
-                $txService->failAndRefund($tx, (string) $reason, $request->all());
+            // Abaikan jika transaksi sudah terminal (SUCCESS, FAILED, REFUNDED)
+            if (! in_array($tx->status, [Transaction::STATUS_SUCCESS, Transaction::STATUS_FAILED, Transaction::STATUS_REFUNDED], true)) {
+                if (in_array($status, ['success', 'paid', 'settlement', 'completed'], true)) {
+                    $txService->markSuccess($tx, (string) ($providerRef ?? $tx->provider_ref), $request->all());
+                } elseif (in_array($status, ['failed', 'failure', 'expired', 'cancelled'], true)) {
+                    $reason = $request->input('failure_reason') ?? $request->input('message') ?? 'Provider webhook reported failure';
+                    $txService->failAndRefund($tx, (string) $reason, $request->all());
+                }
             }
         }
 
@@ -126,5 +137,42 @@ class WebhookController extends ApiController
         $topup = $service->handleWebhook((string) $gateway, $payload, (string) $signature);
 
         return ApiResponse::success(new TopupResource($topup), 'Callback berhasil diproses');
+    }
+
+    public function providerCallback(Request $request, string $slug): JsonResponse
+    {
+        /** @var \App\Domain\Product\Models\Provider|null $provider */
+        $provider = \App\Domain\Product\Models\Provider::where('callback_slug', $slug)
+            ->orWhere('code', $slug)
+            ->first();
+
+        if (! $provider) {
+            return ApiResponse::error(
+                'PROVIDER_NOT_FOUND',
+                "Endpoint callback untuk provider [{$slug}] tidak ditemukan.",
+                404
+            );
+        }
+
+        if (! $provider->is_active) {
+            return ApiResponse::error(
+                'PROVIDER_INACTIVE',
+                "Provider [{$provider->name}] sedang nonaktif.",
+                403
+            );
+        }
+
+        // Jika driver memiliki custom webhook handler
+        $driverClass = $provider->driver;
+        if ($driverClass && ! str_contains($driverClass, '\\')) {
+            $driverClass = 'App\\Domain\\Ppob\\Drivers\\' . $driverClass;
+        }
+        if ($driverClass && class_exists($driverClass) && method_exists($driverClass, 'handleWebhook')) {
+            return app($driverClass)->handleWebhook($request, $provider);
+        }
+
+        // Generic PPOB webhook processing: injeksikan provider source
+        $request->merge(['source' => $provider->code, 'provider' => $provider->code]);
+        return $this->ppobCallback($request);
     }
 }

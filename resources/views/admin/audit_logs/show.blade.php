@@ -67,8 +67,9 @@
                     </div>
 
                     <div>
-                        <span class="block text-xs text-slate-500">Alamat IP</span>
+                        <span class="block text-xs text-slate-500">Alamat IP Admin (Client IP)</span>
                         <div class="text-sm font-mono text-slate-300 mt-0.5">{{ $auditLog->ip_address ?? '127.0.0.1' }}</div>
+                        <span class="text-[10px] text-slate-500">IP komputer admin yang mengeksekusi aksi dari browser</span>
                     </div>
 
                     <div>

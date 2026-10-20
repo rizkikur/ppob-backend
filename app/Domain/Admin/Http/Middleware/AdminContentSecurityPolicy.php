@@ -5,6 +5,7 @@ namespace App\Domain\Admin\Http\Middleware;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\View;
+use Illuminate\Support\Facades\Vite;
 use Symfony\Component\HttpFoundation\Response;
 
 class AdminContentSecurityPolicy
@@ -17,6 +18,7 @@ class AdminContentSecurityPolicy
         $nonce = base64_encode(random_bytes(16));
         $request->attributes->set('csp_nonce', $nonce);
         View::share('csp_nonce', $nonce);
+        Vite::useCspNonce($nonce);
 
         /** @var Response $response */
         $response = $next($request);

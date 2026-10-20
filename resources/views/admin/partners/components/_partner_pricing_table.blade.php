@@ -64,11 +64,24 @@
                                 </span>
                             </td>
                             <td class="py-2.5 px-3 text-right whitespace-nowrap">
-                                <button type="button"
-                                        @click="$dispatch('open-pricing-modal', { productId: '{{ $prod?->id }}', sellPrice: '{{ $sellCents / 100 }}' })"
-                                        class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition-colors">
-                                    Edit
-                                </button>
+                                <div class="flex items-center justify-end gap-1.5">
+                                    <button type="button"
+                                            @click="$dispatch('open-pricing-modal', { productId: '{{ $prod?->id }}', sellPrice: '{{ $sellCents / 100 }}' })"
+                                            class="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-lg text-xs font-medium transition-colors">
+                                        Edit
+                                    </button>
+                                    @if($prod)
+                                        <form action="{{ route('admin.partners.pricing.destroy', [$partner, $prod]) }}" method="POST" class="inline"
+                                              onsubmit="return confirm('Hapus harga khusus untuk {{ $prod->name }}? Mitra akan kembali menggunakan harga default tier.');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit"
+                                                    class="px-2.5 py-1 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 rounded-lg text-xs font-medium transition-colors">
+                                                Hapus
+                                            </button>
+                                        </form>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                     @endforeach

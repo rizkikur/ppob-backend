@@ -82,7 +82,7 @@
             <div class="pt-3 border-t border-slate-800 flex items-center justify-between text-xs">
                 <span class="text-slate-400">Saldo Dompet Saat Ini:</span>
                 <span class="font-mono font-bold text-emerald-400 text-sm">
-                    Rp {{ number_format(($topup->user?->wallet?->balance_cents ?? 0) / 100, 0, ',', '.') }}
+                    {{ $topup->user?->wallet ? $topup->user->wallet->balance()->format() : 'Rp 0' }}
                 </span>
             </div>
         </div>

@@ -71,6 +71,11 @@ class User extends Authenticatable
         return $this->hasMany(OtpCode::class, 'phone', 'phone');
     }
 
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(\App\Domain\Transaction\Models\Transaction::class, 'user_id');
+    }
+
     // ─── Helpers ──────────────────────────────────────────
 
     /** Apakah user sudah mengatur PIN? */

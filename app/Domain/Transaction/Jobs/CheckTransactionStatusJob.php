@@ -44,15 +44,32 @@ class CheckTransactionStatusJob implements ShouldQueue
                     $result['raw'] ?? $result
                 );
             } elseif ($status === 'failed') {
+                $supplier = $tx->supplier_id ? \App\Domain\Product\Models\Provider::find($tx->supplier_id) : $tx->product->provider;
+                $upstreamRc = $result['code'] ?? $result['response_code'] ?? $result['rc'] ?? null;
+                $resolvedError = app(\App\Domain\Ppob\Services\ProviderErrorMappingService::class)->resolve(
+                    $supplier,
+                    $upstreamRc,
+                    $result['message'] ?? 'Provider transaction failed'
+                );
+
                 $transactionService->failAndRefund(
                     $tx,
-                    $result['message'] ?? 'Provider transaction failed',
-                    $result['raw'] ?? $result
+                    $resolvedError['message'],
+                    is_array($result['raw'] ?? null)
+                        ? array_merge($result['raw'], ['internal_error_code' => $resolvedError['internal_code'], 'upstream_rc' => $upstreamRc])
+                        : ['raw' => $result, 'internal_error_code' => $resolvedError['internal_code'], 'upstream_rc' => $upstreamRc]
                 );
             } else {
                 // Masih pending / processing
                 if ($this->attempts() < $this->tries) {
-                    $this->release(15);
+                    $delay = match ($this->attempts()) {
+                        1 => 10, // Attempt 1 selesai di detik ke-2 -> jeda 10 detik
+                        2 => 15, // Attempt 2 selesai -> jeda 15 detik
+                        3 => 30, // Attempt 3 selesai -> jeda 30 detik (kelipatan 15)
+                        4 => 45, // Attempt 4 selesai -> jeda 45 detik (kelipatan 15)
+                        default => 15,
+                    };
+                    $this->release($delay);
                 }
             }
         } catch (\Throwable $e) {
@@ -66,13 +83,9 @@ class CheckTransactionStatusJob implements ShouldQueue
 
     public function failed(\Throwable $exception): void
     {
-        /** @var Transaction|null $tx */
-        $tx = $this->transaction->fresh(['user']);
-        if ($tx && ! in_array($tx->status, [Transaction::STATUS_SUCCESS, Transaction::STATUS_FAILED, Transaction::STATUS_REFUNDED], true)) {
-            app(TransactionService::class)->failAndRefund(
-                $tx,
-                'Polling gagal: '.$exception->getMessage()
-            );
-        }
+        // Jika 5 kali percobaan polling selesai dan status upstream masih belum sukses/gagal,
+        // pertahankan status PROCESSING agar admin dapat melakukan 'Re-query Upstream'
+        // atau menunggu penyelesaian webhook/rekonsiliasi resmi dari provider tanpa refund prematur.
+        \Illuminate\Support\Facades\Log::warning("Polling status 5x selesai untuk transaksi #{$this->transaction->id}, transaksi tetap PROCESSING: {$exception->getMessage()}");
     }
 }

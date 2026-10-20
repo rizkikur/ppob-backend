@@ -23,7 +23,7 @@
                         $marginPct = $baseCost > 0 ? round(($margin / $baseCost) * 100, 1) : 0;
                         $durationSeconds = $trx->updated_at && $trx->created_at ? max(0, $trx->updated_at->diffInSeconds($trx->created_at)) : 0;
                     @endphp
-                    <tr class="hover:bg-slate-700/30 transition-colors group">
+                    <tr data-trx-id="{{ $trx->id }}" class="hover:bg-slate-700/30 transition-colors group">
                         {{-- ID & Waktu / SLA --}}
                         <td class="py-3.5 px-3.5 whitespace-nowrap">
                             <div class="font-mono text-xs font-bold text-indigo-400">#{{ $trx->id }}</div>
@@ -110,7 +110,7 @@
                                     default => 'bg-slate-500/10 text-slate-400 border-slate-500/20',
                                 };
                             @endphp
-                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border {{ $badgeClass }}">
+                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold border {{ $badgeClass }}" data-status-badge="{{ $trx->status }}">
                                 {{ ucfirst($trx->status) }}
                             </span>
                         </td>
@@ -150,9 +150,47 @@
         </table>
     </div>
 
-    @if($transactions->hasPages())
-        <div class="p-4 border-t border-slate-700/60 bg-slate-900/30">
-            {{ $transactions->links() }}
+    {{-- Sleek FinTech Simple Pagination Footer (Zero COUNT(*) load) --}}
+    @if($transactions->count() > 0)
+        <div class="px-5 py-3.5 border-t border-slate-700/60 bg-slate-900/40 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            <div class="text-slate-400 text-[11px] flex items-center gap-2">
+                <span class="inline-flex items-center px-2 py-0.5 rounded-md bg-slate-800 text-slate-300 font-mono font-semibold border border-slate-700/60">
+                    Hal. {{ $transactions->currentPage() }}
+                </span>
+                <span>Menampilkan {{ $transactions->count() }} data transaksi (Zero-Count O(1) Pagination)</span>
+            </div>
+
+            <div class="inline-flex items-center gap-2">
+                {{-- Tombol Sebelumnya --}}
+                @if($transactions->onFirstPage())
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/40 text-slate-600 border border-slate-800/60 text-xs font-semibold cursor-not-allowed select-none">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        <span>Sebelumnya</span>
+                    </span>
+                @else
+                    <a href="{{ $transactions->previousPageUrl() }}"
+                       data-pagination-link
+                       class="pagination-ajax-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 text-xs font-semibold transition-all shadow-sm">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/></svg>
+                        <span>Sebelumnya</span>
+                    </a>
+                @endif
+
+                {{-- Tombol Selanjutnya --}}
+                @if($transactions->hasMorePages())
+                    <a href="{{ $transactions->nextPageUrl() }}"
+                       data-pagination-link
+                       class="pagination-ajax-btn inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700/80 text-xs font-semibold transition-all shadow-sm">
+                        <span>Selanjutnya</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </a>
+                @else
+                    <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-800/40 text-slate-600 border border-slate-800/60 text-xs font-semibold cursor-not-allowed select-none">
+                        <span>Selanjutnya</span>
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg>
+                    </span>
+                @endif
+            </div>
         </div>
     @endif
 </div>

@@ -4,12 +4,16 @@ namespace App\Domain\Admin\Http\Controllers\Partner;
 
 use App\Domain\Admin\Http\Requests\AdjustPartnerBalanceRequest;
 use App\Domain\Admin\Http\Requests\StorePartnerRequest;
+use App\Domain\Admin\Http\Requests\StorePartnerRoutingRuleRequest;
 use App\Domain\Admin\Http\Requests\UpdatePartnerPricingRequest;
 use App\Domain\Admin\Http\Requests\UpdatePartnerRequest;
 use App\Domain\Admin\Models\Admin;
 use App\Domain\Admin\Services\AdminPartnerManagementService;
 use App\Domain\Partner\Models\Partner;
+use App\Domain\Partner\Models\PartnerRoutingRule;
 use App\Domain\Product\Models\Product;
+use App\Domain\Product\Models\ProductCategory;
+use App\Domain\Product\Models\Provider;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -79,6 +83,7 @@ class AdminPartnerController extends Controller
         $partner->loadMissing([
             'user.wallet.mutations' => fn ($q) => $q->latest()->limit(15),
             'productPrices.product',
+            'routingRules.preferredProvider',
             'webhookDeliveries' => fn ($q) => $q->latest()->limit(30),
             'logs' => fn ($q) => $q->latest()->limit(30),
         ]);
@@ -91,11 +96,16 @@ class AdminPartnerController extends Controller
             ->orderBy('name')
             ->get(['id', 'name', 'sku_code', 'base_price_cents', 'customer_price_cents']);
 
+        $categories = ProductCategory::where('is_active', true)->orderBy('name')->get();
+        $providers = Provider::where('is_active', true)->orderBy('name')->get();
+
         return view('admin.partners.show', [
             'partner' => $partner,
             'partnerUser' => $partnerUser,
             'balance' => $balance,
             'availableProducts' => $availableProducts,
+            'categories' => $categories,
+            'providers' => $providers,
         ]);
     }
 
@@ -205,5 +215,50 @@ class AdminPartnerController extends Controller
         return redirect()
             ->back()
             ->with('success', 'Harga khusus produk untuk mitra berhasil disimpan.');
+    }
+
+    /**
+     * Store or update routing and failover rule for this partner.
+     */
+    public function storeRoutingRule(Partner $partner, StorePartnerRoutingRuleRequest $request): RedirectResponse
+    {
+        /** @var Admin $admin */
+        $admin = auth('admin')->user();
+
+        $this->partnerService->addOrUpdateRoutingRule($partner, $request->validated(), $admin);
+
+        return redirect()
+            ->route('admin.partners.show', $partner)
+            ->with('success', 'Aturan failover routing mitra berhasil disimpan.');
+    }
+
+    /**
+     * Remove a routing rule from this partner.
+     */
+    public function destroyRoutingRule(Partner $partner, PartnerRoutingRule $rule): RedirectResponse
+    {
+        /** @var Admin $admin */
+        $admin = auth('admin')->user();
+
+        $this->partnerService->deleteRoutingRule($partner, $rule, $admin);
+
+        return redirect()
+            ->route('admin.partners.show', $partner)
+            ->with('success', 'Aturan failover routing mitra berhasil dihapus.');
+    }
+
+    /**
+     * Delete custom price override for a product.
+     */
+    public function destroyPricing(Partner $partner, Product $product): RedirectResponse
+    {
+        /** @var Admin $admin */
+        $admin = auth('admin')->user();
+
+        $this->partnerService->deleteCustomPricing($partner, $product->id, $admin);
+
+        return redirect()
+            ->back()
+            ->with('success', "Override harga khusus untuk SKU {$product->sku_code} berhasil dihapus.");
     }
 }

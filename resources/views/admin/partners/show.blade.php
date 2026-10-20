@@ -108,9 +108,10 @@
 
     {{-- Main Grid Content --}}
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {{-- Left Column: API Credentials & IP Whitelist --}}
+        {{-- Left Column: API Credentials & IP Whitelist & Routing Rules --}}
         <div class="space-y-6">
             @include('admin.partners.components._api_credential_card')
+            @include('admin.partners.components._partner_routing_rules')
             @include('admin.partners.components._ip_whitelist_manager')
         </div>
 
@@ -131,5 +132,6 @@
     @include('admin.partners.modals._confirm_rotate_modal')
     @include('admin.partners.modals._balance_adjustment_modal')
     @include('admin.partners.modals._custom_pricing_modal')
+    @include('admin.partners.modals._partner_routing_rule_modal')
 </div>
 @endsection

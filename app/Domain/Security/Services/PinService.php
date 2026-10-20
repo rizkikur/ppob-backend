@@ -51,6 +51,11 @@ class PinService
     public function changePin(User $user, string $newPin): void
     {
         $user->update(['pin_hash' => Hash::make($newPin)]);
+
+        // Invalidate semua pin verification token yang belum dipakai untuk user ini
+        PinVerificationToken::where('user_id', $user->id)
+            ->whereNull('used_at')
+            ->update(['used_at' => now()]);
     }
 
     /**

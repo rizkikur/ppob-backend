@@ -9,7 +9,7 @@ use App\Domain\Ppob\Services\PpobService;
 use App\Domain\Transaction\Models\Transaction;
 use App\Domain\Wallet\Models\WalletMutation;
 use App\Domain\Wallet\Services\WalletService;
-use Illuminate\Contracts\Pagination\LengthAwarePaginator;
+use Illuminate\Contracts\Pagination\Paginator;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -34,15 +34,38 @@ class AdminTransactionManagementService
      */
     public function buildQuery(array $filters)
     {
-        $query = Transaction::query()->with([
-            'user.userTier',
-            'product.provider',
-            'product.category',
-            'partner',
-            'supplier',
-            'originalSupplier',
-            'inquiry',
-        ]);
+        $query = Transaction::query()
+            ->select([
+                'id',
+                'user_id',
+                'product_id',
+                'partner_id',
+                'supplier_id',
+                'original_supplier_id',
+                'inquiry_id',
+                'customer_number',
+                'amount_cents',
+                'sell_price_cents',
+                'status',
+                'idempotency_key',
+                'provider_ref',
+                'provider_response',
+                'failure_reason',
+                'is_failover',
+                'created_at',
+                'updated_at',
+            ])
+            ->with([
+                'user' => fn ($q) => $q->select(['id', 'name', 'phone', 'user_tier_id']),
+                'user.userTier' => fn ($q) => $q->select(['id', 'name', 'label']),
+                'product' => fn ($q) => $q->select(['id', 'category_id', 'provider_id', 'operator_id', 'name', 'sku_code', 'base_price_cents']),
+                'product.provider' => fn ($q) => $q->select(['id', 'name']),
+                'product.category' => fn ($q) => $q->select(['id', 'name', 'slug']),
+                'partner' => fn ($q) => $q->select(['id', 'name', 'code']),
+                'supplier' => fn ($q) => $q->select(['id', 'name']),
+                'originalSupplier' => fn ($q) => $q->select(['id', 'name']),
+                'inquiry' => fn ($q) => $q->select(['id', 'customer_number']),
+            ]);
 
         // Search Keyword (ID, customer number, provider ref, idempotency key)
         if (! empty($filters['q'])) {
@@ -50,10 +73,24 @@ class AdminTransactionManagementService
             $query->where(function ($sub) use ($q) {
                 if (is_numeric($q)) {
                     $sub->orWhere('id', (int) $q);
+                    // Jika nomor HP Indonesia (awalan 08 atau 628), utamakan prefix match agar B-Tree index terpakai
+                    if (str_starts_with($q, '08') || str_starts_with($q, '628')) {
+                        $sub->orWhere('customer_number', 'like', "{$q}%");
+                    } else {
+                        $sub->orWhere('customer_number', 'like', "%{$q}%");
+                    }
+                } else {
+                    $sub->orWhere('customer_number', 'like', "%{$q}%");
                 }
-                $sub->orWhere('customer_number', 'like', "%{$q}%")
-                    ->orWhere('provider_ref', 'like', "%{$q}%")
-                    ->orWhere('idempotency_key', 'like', "%{$q}%");
+
+                // Jika format idempotency key / UUID, exact match ke unique index
+                if (str_starts_with($q, 'DEMO-IDEMP-') || str_starts_with($q, 'idem-') || strlen($q) === 36) {
+                    $sub->orWhere('idempotency_key', $q);
+                } else {
+                    $sub->orWhere('idempotency_key', 'like', "%{$q}%");
+                }
+
+                $sub->orWhere('provider_ref', 'like', "%{$q}%");
             });
         }
 
@@ -97,13 +134,13 @@ class AdminTransactionManagementService
     }
 
     /**
-     * Filter and paginate transactions with related relations.
+     * Filter and paginate transactions with related relations using zero-count simplePaginate.
      *
      * @param  array<string, mixed>  $filters
      */
-    public function filterTransactions(array $filters): LengthAwarePaginator
+    public function filterTransactions(array $filters): Paginator
     {
-        return $this->buildQuery($filters)->paginate(25)->withQueryString();
+        return $this->buildQuery($filters)->simplePaginate(25)->withQueryString();
     }
 
     /**

@@ -19,12 +19,15 @@ class ProductSupplierRoute extends Model
     protected $fillable = [
         'product_id',
         'provider_id',
+        'supplier_sku',
         'priority',
+        'cost_cents',
         'is_active',
     ];
 
     protected $casts = [
         'priority' => 'integer',
+        'cost_cents' => 'integer',
         'is_active' => 'boolean',
     ];
 
@@ -51,5 +54,35 @@ class ProductSupplierRoute extends Model
     public function scopeOrdered(Builder $query): Builder
     {
         return $query->orderBy('priority', 'asc');
+    }
+
+    /**
+     * Dapatkan SKU yang dikirim ke upstream (fallback ke SKU internal jika supplier_sku belum diisi).
+     */
+    public function getEffectiveSku(): string
+    {
+        return $this->supplier_sku ?: ($this->product?->sku_code ?? '');
+    }
+
+    /**
+     * Mutator agar cost_cents dapat menerima integer atau instance Money.
+     */
+    public function setCostCentsAttribute(mixed $value): void
+    {
+        if ($value instanceof \App\Domain\Shared\ValueObjects\Money) {
+            $this->attributes['cost_cents'] = $value->toCents();
+        } elseif (is_numeric($value)) {
+            $this->attributes['cost_cents'] = (int) $value;
+        } else {
+            $this->attributes['cost_cents'] = null;
+        }
+    }
+
+    /**
+     * Accessor untuk mendapatkan nilai cost_cents dalam bentuk Money value object.
+     */
+    public function getCostMoneyAttribute(): ?\App\Domain\Shared\ValueObjects\Money
+    {
+        return $this->cost_cents !== null ? \App\Domain\Shared\ValueObjects\Money::fromCents($this->cost_cents) : null;
     }
 }

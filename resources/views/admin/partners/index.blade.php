@@ -138,7 +138,8 @@
                     <tbody class="divide-y divide-slate-800/60 text-slate-300">
                         @foreach($partners as $partner)
                             @php
-                                $balanceCents = $partner->user?->wallet?->balance_cents ?? 0;
+                                $wallet = $partner->user?->wallet;
+                                $balance = $wallet?->balance();
                             @endphp
                             <tr class="hover:bg-slate-800/40 transition-colors">
                                 <td class="py-3.5 px-4">
@@ -161,7 +162,7 @@
                                     </span>
                                 </td>
                                 <td class="py-3.5 px-4 font-mono font-bold text-white text-sm whitespace-nowrap">
-                                    Rp {{ number_format($balanceCents / 100, 0, ',', '.') }}
+                                    {{ $balance ? $balance->format() : 'Rp 0' }}
                                 </td>
                                 <td class="py-3.5 px-4 whitespace-nowrap">
                                     <span class="px-2 py-0.5 rounded bg-slate-800 text-[10px] uppercase font-bold text-slate-300 mr-1">{{ $partner->protocol }}</span>

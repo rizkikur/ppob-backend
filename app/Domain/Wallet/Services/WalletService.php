@@ -44,10 +44,11 @@ class WalletService
                 ->first();
 
             if (! $wallet) {
-                $wallet = Wallet::create([
-                    'user_id' => $user->id,
-                    'balance_cents' => 0,
-                ]);
+                // firstOrCreate untuk menangani race condition concurrent wallet creation
+                Wallet::firstOrCreate(
+                    ['user_id' => $user->id],
+                    ['balance_cents' => 0]
+                );
                 $wallet = Wallet::where('user_id', $user->id)
                     ->lockForUpdate()
                     ->firstOrFail();

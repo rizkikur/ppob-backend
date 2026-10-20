@@ -105,6 +105,11 @@ class TopupService
                 return $lockedTopup;
             }
 
+            // Guard: top-up yang sudah failed/expired tidak boleh dikreditkan otomatis
+            if (! $lockedTopup->isPending()) {
+                return $lockedTopup;
+            }
+
             // Tambah saldo ke wallet user via WalletService
             $this->walletService->credit(
                 $lockedTopup->user,
@@ -135,6 +140,11 @@ class TopupService
                 ->firstOrFail();
 
             if ($lockedTopup->isPaid()) {
+                return $lockedTopup;
+            }
+
+            // Guard: top-up yang tidak pending tidak dapat dikonfirmasi
+            if (! $lockedTopup->isPending()) {
                 return $lockedTopup;
             }
 

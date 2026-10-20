@@ -2,6 +2,7 @@
 
 namespace App\Domain\Ppob\DTOs;
 
+use App\Domain\Product\Models\Product;
 use App\Domain\Product\Models\Provider;
 
 /**
@@ -13,7 +14,9 @@ class ResolvedRoute
         public readonly Provider $provider,
         public readonly Provider $originalProvider,
         public readonly bool $isFailover,
-        public readonly string $queueName
+        public readonly string $queueName,
+        public readonly ?string $supplierSku = null,
+        public readonly ?int $costCents = null
     ) {}
 
     public function getProviderId(): int
@@ -24,5 +27,14 @@ class ResolvedRoute
     public function getOriginalProviderId(): int
     {
         return $this->originalProvider->id;
+    }
+
+    public function getEffectiveSku(Product|string $product): string
+    {
+        if (! empty($this->supplierSku)) {
+            return $this->supplierSku;
+        }
+
+        return $product instanceof Product ? $product->sku_code : (string) $product;
     }
 }

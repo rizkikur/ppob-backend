@@ -67,6 +67,71 @@ class AdminTransactionController extends Controller
     }
 
     /**
+     * Server-Sent Events (SSE) stream for real-time filtered transaction updates.
+     */
+    public function stream(TransactionFilterRequest $request, \App\Domain\Transaction\Services\TransactionEventStreamer $streamer): \Symfony\Component\HttpFoundation\StreamedResponse
+    {
+        $filters = $request->validated();
+        $maxDuration = max(1, min(60, (int) $request->query('duration', 25)));
+
+        $response = new \Symfony\Component\HttpFoundation\StreamedResponse(function () use ($filters, $streamer, $maxDuration) {
+            if (ob_get_level() > 0) {
+                ob_end_clean();
+            }
+
+            $lastSeq = (int) \Illuminate\Support\Facades\Cache::get('sse:event:seq', 0);
+            $startTime = time();
+            $lastPing = time();
+
+            echo "event: connected\n";
+            echo "data: " . json_encode(['status' => 'connected', 'filters' => $filters]) . "\n\n";
+
+            if (function_exists('flush')) {
+                flush();
+            }
+
+            while (time() - $startTime < $maxDuration) {
+                if (connection_aborted()) {
+                    break;
+                }
+
+                $currentSeq = (int) \Illuminate\Support\Facades\Cache::get('sse:event:seq', 0);
+                if ($currentSeq > $lastSeq) {
+                    $lastSeq = $currentSeq;
+                    $latestEvent = \Illuminate\Support\Facades\Cache::get('sse:event:latest');
+
+                    if ($latestEvent && $streamer->matchesFilter($latestEvent, $filters)) {
+                        echo "event: transaction\n";
+                        echo "data: " . json_encode($latestEvent) . "\n\n";
+
+                        if (function_exists('flush')) {
+                            flush();
+                        }
+                    }
+                }
+
+                if (time() - $lastPing >= 10) {
+                    echo "event: ping\n";
+                    echo "data: {\"time\":" . time() . "}\n\n";
+                    if (function_exists('flush')) {
+                        flush();
+                    }
+                    $lastPing = time();
+                }
+
+                usleep(250000);
+            }
+        });
+
+        $response->headers->set('Content-Type', 'text/event-stream');
+        $response->headers->set('Cache-Control', 'no-cache, no-transform');
+        $response->headers->set('Connection', 'keep-alive');
+        $response->headers->set('X-Accel-Buffering', 'no');
+
+        return $response;
+    }
+
+    /**
      * Display detailed transaction information.
      */
     public function show(Transaction $transaction): View

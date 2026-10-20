@@ -22,6 +22,7 @@ class Product extends Model
     protected $fillable = [
         'provider_id',
         'category_id',
+        'operator_id',
         'sku_code',
         'name',
         'description',
@@ -29,12 +30,19 @@ class Product extends Model
         'base_price_cents',
         'admin_fee_cents',
         'is_active',
+        'allow_failover',
     ];
 
     protected $casts = [
         'base_price_cents' => MoneyCast::class,
         'admin_fee_cents' => MoneyCast::class,
         'is_active' => 'boolean',
+        'allow_failover' => 'boolean',
+    ];
+
+    protected $attributes = [
+        'is_active' => true,
+        'allow_failover' => true,
     ];
 
     public const TYPE_PREPAID = 'prepaid';
@@ -64,6 +72,11 @@ class Product extends Model
     public function category(): BelongsTo
     {
         return $this->belongsTo(ProductCategory::class, 'category_id');
+    }
+
+    public function operator(): BelongsTo
+    {
+        return $this->belongsTo(Operator::class, 'operator_id');
     }
 
     public function tierPrices(): HasMany

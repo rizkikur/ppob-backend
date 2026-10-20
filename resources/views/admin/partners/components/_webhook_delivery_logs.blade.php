@@ -9,7 +9,18 @@
             <p class="text-xs text-slate-400 mt-0.5">Riwayat pengiriman notifikasi transaksi ke callback URL mitra beserta mekanisme retry</p>
         </div>
 
-        <span class="text-xs text-slate-400">Menampilkan 30 riwayat terakhir</span>
+        <div class="flex items-center gap-3">
+            <span class="text-xs text-slate-400 hidden sm:inline">Menampilkan 30 riwayat terakhir</span>
+            <form action="{{ route('admin.partners.webhooks.ping', $partner) }}" method="POST" class="inline">
+                @csrf
+                <button type="submit"
+                        {{ empty($partner->callback_url) ? 'disabled title=Callback-URL-belum-diisi' : 'title=Kirim-event-ping.test-ke-callback-URL' }}
+                        class="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold text-xs rounded-xl transition-all shadow-md shadow-indigo-600/30 flex items-center gap-1.5">
+                    <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                    <span>Test Ping Webhook</span>
+                </button>
+            </form>
+        </div>
     </div>
 
     @if($partner->webhookDeliveries->isEmpty())
@@ -52,12 +63,14 @@
                                 <div class="text-[10px] text-slate-500">{{ $delivery->created_at->format('d M H:i:s') }}</div>
                             </td>
                             <td class="py-2.5 px-3 whitespace-nowrap font-mono text-indigo-300">
-                                @if($delivery->transaction_id)
+                                @if($delivery->transaction_id && $delivery->transaction_id > 0)
                                     <a href="{{ route('admin.transactions.show', $delivery->transaction_id) }}" class="hover:underline">
                                         #{{ $delivery->transaction_id }}
                                     </a>
                                 @else
-                                    -
+                                    <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+                                        PING TEST
+                                    </span>
                                 @endif
                             </td>
                             <td class="py-2.5 px-3 whitespace-nowrap">

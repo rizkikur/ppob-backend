@@ -68,6 +68,13 @@ return [
         'pdam' => [
             'webhook_secret' => env('PPOB_PDAM_WEBHOOK_SECRET'),
         ],
+        'mlink' => [
+            'client_id' => env('PPOB_MLINK_CLIENT_ID', 'xymetri'),
+            'password' => env('PPOB_MLINK_PASSWORD'),
+            'secret_key' => env('PPOB_MLINK_SECRET_KEY'),
+            'api_url' => env('PPOB_MLINK_API_URL', 'https://gateway.m-link.id/json'),
+            'webhook_secret' => env('PPOB_MLINK_WEBHOOK_SECRET', 'mlink_secret_key'),
+        ],
     ],
 
     /*
@@ -122,6 +129,11 @@ return [
                 'max_workers' => 20,
                 'timeout' => 60,
             ],
+            'mlink' => [
+                'queue' => 'supplier_mlink',
+                'max_workers' => 30,
+                'timeout' => 60,
+            ],
         ],
     ],
 
@@ -133,6 +145,30 @@ return [
     'routing' => [
         'default_user_allow_failover' => env('PPOB_ROUTING_DEFAULT_FAILOVER', true),
         'default_user_failover_policy' => env('PPOB_ROUTING_DEFAULT_POLICY', 'same_category'),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
+    | Operational Bot & Webhook Alert Configuration
+    |--------------------------------------------------------------------------
+    | Pengaturan notifikasi bot Telegram/Discord saat terjadi anomali sistem:
+    | - Circuit Breaker Tripped (OPEN)
+    | - Saldo Provider Menipis (< Threshold)
+    | - Semua Rute Failover Habis / Gagal
+    */
+    'alerts' => [
+        'enabled' => env('OPERATIONAL_ALERTS_ENABLED', true),
+        'channel' => env('OPERATIONAL_ALERTS_CHANNEL', 'log'), // 'telegram' | 'webhook' | 'log'
+        'cooldown_seconds' => (int) env('OPERATIONAL_ALERTS_COOLDOWN', 300), // 5 menit anti-spam throttle
+
+        'telegram' => [
+            'bot_token' => env('TELEGRAM_BOT_TOKEN'),
+            'chat_id' => env('TELEGRAM_CHAT_ID'),
+        ],
+
+        'webhook' => [
+            'url' => env('ALERT_WEBHOOK_URL'),
+        ],
     ],
 
 ];

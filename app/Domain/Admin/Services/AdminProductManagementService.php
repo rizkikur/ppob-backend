@@ -25,12 +25,25 @@ class AdminProductManagementService
      */
     public function filterProducts(array $filters): LengthAwarePaginator
     {
-        $query = Product::query()->with([
-            'category',
-            'provider',
-            'tierPrices.userTier',
-            'supplierRoutes.provider',
-        ]);
+        $query = Product::query()
+            ->select([
+                'id',
+                'provider_id',
+                'category_id',
+                'operator_id',
+                'sku_code',
+                'name',
+                'product_type',
+                'base_price_cents',
+                'admin_fee_cents',
+                'is_active',
+                'created_at',
+            ])
+            ->with([
+                'category' => fn ($q) => $q->select(['id', 'name', 'slug']),
+                'operator' => fn ($q) => $q->select(['id', 'name', 'code']),
+                'provider' => fn ($q) => $q->select(['id', 'name']),
+            ]);
 
         if (! empty($filters['q'])) {
             $q = trim($filters['q']);
@@ -42,6 +55,10 @@ class AdminProductManagementService
 
         if (! empty($filters['category_id'])) {
             $query->where('category_id', (int) $filters['category_id']);
+        }
+
+        if (! empty($filters['operator_id'])) {
+            $query->where('operator_id', (int) $filters['operator_id']);
         }
 
         if (! empty($filters['provider_id'])) {
@@ -73,6 +90,7 @@ class AdminProductManagementService
             $product = Product::create([
                 'provider_id' => $data['provider_id'],
                 'category_id' => $data['category_id'],
+                'operator_id' => ! empty($data['operator_id']) ? (int) $data['operator_id'] : null,
                 'sku_code' => strtoupper(trim($data['sku_code'])),
                 'name' => trim($data['name']),
                 'description' => $data['description'] ?? null,
@@ -80,6 +98,7 @@ class AdminProductManagementService
                 'base_price_cents' => $basePriceCents,
                 'admin_fee_cents' => $adminFeeCents,
                 'is_active' => (bool) ($data['is_active'] ?? true),
+                'allow_failover' => (bool) ($data['allow_failover'] ?? true),
             ]);
 
             // Create initial supplier route
@@ -131,6 +150,7 @@ class AdminProductManagementService
             $product->update([
                 'provider_id' => $data['provider_id'],
                 'category_id' => $data['category_id'],
+                'operator_id' => ! empty($data['operator_id']) ? (int) $data['operator_id'] : null,
                 'sku_code' => strtoupper(trim($data['sku_code'])),
                 'name' => trim($data['name']),
                 'description' => $data['description'] ?? null,
@@ -138,6 +158,7 @@ class AdminProductManagementService
                 'base_price_cents' => $basePriceCents,
                 'admin_fee_cents' => $adminFeeCents,
                 'is_active' => (bool) ($data['is_active'] ?? false),
+                'allow_failover' => (bool) ($data['allow_failover'] ?? false),
             ]);
 
             $this->auditLogService->log(
@@ -480,10 +501,14 @@ class AdminProductManagementService
                 if (empty($route['provider_id'])) {
                     continue;
                 }
+                $costCents = ! empty($route['cost_rupiah']) ? (int) round(((float) $route['cost_rupiah']) * 100) : (! empty($route['cost_cents']) ? (int) $route['cost_cents'] : null);
+                $supplierSku = ! empty($route['supplier_sku']) ? trim((string) $route['supplier_sku']) : null;
                 ProductSupplierRoute::create([
                     'product_id' => $product->id,
                     'provider_id' => (int) $route['provider_id'],
+                    'supplier_sku' => $supplierSku,
                     'priority' => (int) ($route['priority'] ?? 1),
+                    'cost_cents' => $costCents,
                     'is_active' => filter_var($route['is_active'] ?? true, FILTER_VALIDATE_BOOLEAN),
                 ]);
             }

@@ -360,6 +360,31 @@ class AdminTransactionListTest extends TestCase
         $response->assertStatus(200);
         $response->assertSee('081277773333');
     }
+
+    public function test_ajax_filter_returns_partial_table_without_full_layout_wrapper(): void
+    {
+        Transaction::create([
+            'user_id' => $this->user->id,
+            'product_id' => $this->productA->id,
+            'customer_number' => '081288884444',
+            'amount_cents' => 1000000,
+            'sell_price_cents' => 1100000,
+            'status' => Transaction::STATUS_SUCCESS,
+            'idempotency_key' => 'idem-ajax-1',
+        ]);
+
+        $this->actingAs($this->admin, 'admin');
+
+        $response = $this->getJson('/admin/transactions?q=081288884444', [
+            'X-Requested-With' => 'XMLHttpRequest',
+        ]);
+
+        $response->assertStatus(200);
+        $response->assertSee('081288884444');
+        $response->assertSee('Zero-Count O(1) Pagination');
+        // Pastikan TIDAK merender seluruh layout / header luar untuk menghemat bandwidth & CPU
+        $response->assertDontSee('Manajemen & Monitoring Transaksi');
+    }
 }
 
 

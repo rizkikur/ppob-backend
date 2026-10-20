@@ -36,8 +36,9 @@
             this.dateEnd = '';
         }
      }"
-     class="bg-slate-900/60 backdrop-blur-md rounded-2xl border border-slate-800 p-5 shadow-xl">
-    <form method="GET" action="{{ route('admin.transactions.index') }}" class="space-y-4">
+     class="relative z-40 bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-xl"
+     style="position: relative; z-index: 40;">
+    <form data-filter-form method="GET" action="{{ route('admin.transactions.index') }}" @submit.prevent="applyFilter($event)" class="space-y-4">
         {{-- Row 1: Search & Primary Dropdowns in Flexible Row --}}
         <div class="flex flex-col lg:flex-row gap-3.5 items-stretch lg:items-end">
             {{-- Search Input (Wide Flexible Grow) --}}
@@ -118,8 +119,9 @@
                                name="date_start"
                                x-model="dateStart"
                                @change="onStartChange($event.target.value)"
+                               @click="$el.showPicker && $el.showPicker()"
                                :max="dateEnd ? dateEnd : null"
-                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
+                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
                     </div>
                     <span class="text-xs text-slate-500 text-center font-medium">s/d</span>
                     <div class="w-full sm:w-44">
@@ -128,8 +130,9 @@
                                name="date_end"
                                x-model="dateEnd"
                                @change="onEndChange($event.target.value)"
+                               @click="$el.showPicker && $el.showPicker()"
                                :min="dateStart ? dateStart : null"
-                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
+                               class="w-full bg-slate-950/80 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-slate-100 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500/50 focus:border-indigo-500 transition-all">
                     </div>
                 </div>
 
@@ -143,16 +146,17 @@
 
             {{-- Action Buttons Right Group --}}
             <div class="flex items-center justify-between sm:justify-end gap-2.5 flex-wrap pt-2 lg:pt-0">
-                {{-- Live Polling Toggle Button --}}
+                {{-- Live Stream SSE Toggle Button --}}
                 <button type="button"
                         @click="toggleLive()"
-                        :class="liveEnabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:text-slate-200'"
-                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all">
+                        :class="liveEnabled ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 ring-1 ring-emerald-500/20 shadow-lg shadow-emerald-500/10' : 'bg-slate-800/80 text-slate-400 border-slate-700/80 hover:text-slate-200'"
+                        class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl border text-xs font-semibold transition-all"
+                        :title="liveEnabled ? 'Monitoring Realtime SSE Aktif' : 'Aktifkan Monitoring Realtime SSE'">
                     <span class="relative flex h-2 w-2">
                         <span x-show="liveEnabled" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
                         <span :class="liveEnabled ? 'bg-emerald-500' : 'bg-slate-500'" class="relative inline-flex rounded-full h-2 w-2"></span>
                     </span>
-                    <span x-text="liveEnabled ? 'Live: ' + countdown + 's' : 'Live: OFF'">Live: OFF</span>
+                    <span x-text="liveEnabled ? '⚡ Live SSE: ON' : 'Live SSE: OFF'">Live SSE: OFF</span>
                 </button>
 
                 {{-- Manual Refresh Button --}}
@@ -165,19 +169,55 @@
                 </button>
 
                 {{-- Reset Filter Button --}}
-                @if(request()->hasAny(['q', 'status', 'provider_id', 'is_failover', 'partner_id', 'date_start', 'date_end']))
-                    <a href="{{ route('admin.transactions.index') }}"
-                       class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl border border-transparent hover:border-slate-700 transition-all">
-                        Reset Filter
-                    </a>
-                @endif
+                <button type="button"
+                        @click.prevent="resetFilter('{{ route('admin.transactions.index') }}')"
+                        class="px-3 py-2 text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl border border-transparent hover:border-slate-700 transition-all">
+                    Reset Filter
+                </button>
 
-                {{-- Export CSV Button --}}
-                <a href="{{ route('admin.transactions.index', array_merge(request()->query(), ['export' => 'csv'])) }}"
-                   class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
-                    <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
-                    <span>CSV</span>
-                </a>
+                {{-- Export CSV Dropdown Menu --}}
+                <div class="relative z-50" x-data="{ open: false }" @click.outside="open = false" style="position: relative; z-index: 50;">
+                    <button type="button"
+                            @click="open = !open"
+                            class="inline-flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 hover:text-white border border-slate-700 rounded-xl text-xs font-semibold transition-all">
+                        <svg class="w-3.5 h-3.5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                        <span>Export CSV</span>
+                        <svg class="w-3 h-3 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                    </button>
+
+                    <div x-show="open" x-cloak
+                         class="absolute right-0 mt-2 w-72 rounded-2xl bg-slate-900 border border-slate-700/80 shadow-2xl py-2 z-50"
+                         style="z-index: 100;">
+                        <div class="px-3.5 py-1.5 border-b border-slate-800 text-[10px] uppercase font-bold text-slate-400 tracking-wider">
+                            Pilihan Unduhan CSV
+                        </div>
+                        <button type="button"
+                                @click="open = false; startAsyncExport()"
+                                class="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-indigo-600/20 hover:text-indigo-300 flex items-start gap-2.5 transition-colors">
+                            <svg class="w-4 h-4 text-indigo-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                            <div>
+                                <span class="font-semibold block text-slate-100">Export Latar Belakang (Async)</span>
+                                <span class="text-[11px] text-slate-400">Rekomendasi untuk ribuan baris, anti-timeout dengan progress bar live.</span>
+                            </div>
+                        </button>
+                        <button type="button"
+                                @click="open = false; exportCsv('{{ route('admin.transactions.index') }}')"
+                                class="w-full text-left px-3.5 py-2.5 text-xs text-slate-200 hover:bg-slate-800 hover:text-white flex items-start gap-2.5 transition-colors">
+                            <svg class="w-4 h-4 text-emerald-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"/></svg>
+                            <div>
+                                <span class="font-semibold block text-slate-100">Export Langsung (Sinkron)</span>
+                                <span class="text-[11px] text-slate-400">Unduh langsung untuk data sedikit (&lt; 500 baris).</span>
+                            </div>
+                        </button>
+                        <div class="border-t border-slate-800 my-1"></div>
+                        <button type="button"
+                                @click="open = false; fetchRecentExports()"
+                                class="w-full text-left px-3.5 py-2 text-xs text-slate-300 hover:bg-slate-800 hover:text-white flex items-center gap-2 transition-colors">
+                            <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                            <span>Riwayat Unduhan Export</span>
+                        </button>
+                    </div>
+                </div>
 
                 {{-- Apply Filter Button --}}
                 <button type="submit"

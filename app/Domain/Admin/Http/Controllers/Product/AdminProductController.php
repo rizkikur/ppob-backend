@@ -27,14 +27,16 @@ class AdminProductController extends Controller
      */
     public function index(Request $request): View
     {
-        $filters = $request->only(['q', 'category_id', 'provider_id', 'is_active', 'product_type']);
+        $filters = $request->only(['q', 'category_id', 'operator_id', 'provider_id', 'is_active', 'product_type']);
         $products = $this->productService->filterProducts($filters);
         $categories = ProductCategory::query()->orderBy('name')->get();
+        $operators = \App\Domain\Product\Models\Operator::query()->active()->orderBy('name')->get();
         $providers = Provider::query()->orderBy('name')->get();
 
         return view('admin.products.index', [
             'products' => $products,
             'categories' => $categories,
+            'operators' => $operators,
             'providers' => $providers,
             'filters' => $filters,
         ]);
@@ -46,10 +48,12 @@ class AdminProductController extends Controller
     public function create(): View
     {
         $categories = ProductCategory::query()->orderBy('name')->get();
+        $operators = \App\Domain\Product\Models\Operator::query()->active()->orderBy('name')->get();
         $providers = Provider::query()->orderBy('name')->get();
 
         return view('admin.products.create', [
             'categories' => $categories,
+            'operators' => $operators,
             'providers' => $providers,
         ]);
     }
@@ -76,12 +80,14 @@ class AdminProductController extends Controller
     {
         $product->loadMissing([
             'category',
+            'operator',
             'provider',
             'tierPrices.userTier',
             'supplierRoutes.provider',
         ]);
 
         $categories = ProductCategory::query()->orderBy('name')->get();
+        $operators = \App\Domain\Product\Models\Operator::query()->active()->orderBy('name')->get();
         $providers = Provider::query()->orderBy('name')->get();
         $tiers = UserTier::query()->orderBy('id')->get();
 
@@ -91,6 +97,7 @@ class AdminProductController extends Controller
         return view('admin.products.edit', [
             'product' => $product,
             'categories' => $categories,
+            'operators' => $operators,
             'providers' => $providers,
             'tiers' => $tiers,
             'tierPricesMap' => $tierPricesMap,
@@ -201,6 +208,9 @@ class AdminProductController extends Controller
         $validated = $request->validate([
             'routes' => ['required', 'array'],
             'routes.*.provider_id' => ['required', 'integer', 'exists:providers,id'],
+            'routes.*.supplier_sku' => ['nullable', 'string', 'max:50'],
+            'routes.*.cost_cents' => ['nullable', 'numeric'],
+            'routes.*.cost_rupiah' => ['nullable', 'numeric'],
             'routes.*.priority' => ['required', 'integer', 'min:1', 'max:10'],
             'routes.*.is_active' => ['nullable'],
         ]);

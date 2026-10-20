@@ -143,6 +143,8 @@ class PpobService
             'xl' => 'XlDriver',
             'pln' => 'PlnDriver',
             'pdam' => 'PdamDriver',
+            'mlink' => 'MLinkGatewayDriver',
+            'mlink_gateway' => 'MLinkGatewayDriver',
         ];
 
         $code = strtolower(trim($providerCode));
@@ -153,7 +155,9 @@ class PpobService
 
     private function resolveDriverByName(string $driverName, string $displayName): PpobProviderInterface
     {
-        $driverClass = 'App\\Domain\\Ppob\\Drivers\\'.$driverName;
+        $driverClass = str_starts_with($driverName, 'App\\')
+            ? $driverName
+            : 'App\\Domain\\Ppob\\Drivers\\'.$driverName;
 
         if (! class_exists($driverClass)) {
             throw BusinessException::providerUnavailable($displayName);
